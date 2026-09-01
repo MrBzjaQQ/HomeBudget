@@ -3,7 +3,8 @@ import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { FormsModule, NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthService } from '../../core/auth.service';
-import { ApiError, UserDto } from '../../core/models';
+import { UserDto } from '../../core/models';
+import { firstApiErrorMessage } from '../../core/http-errors';
 import { ToastService } from '../../core/toast.service';
 import { UsersService } from '../../core/users.service';
 
@@ -167,9 +168,14 @@ import { UsersService } from '../../core/users.service';
       font-weight: 600;
       font-size: 15px;
       padding: 12px;
+      cursor: pointer;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: #0d5f59;
     }
     .btn-primary:disabled {
       opacity: 0.5;
+      cursor: default;
     }
     .btn-add {
       border-radius: 9999px;
@@ -179,6 +185,10 @@ import { UsersService } from '../../core/users.service';
       font-size: 13px;
       font-weight: 600;
       padding: 6px 13px;
+      cursor: pointer;
+    }
+    .btn-add:hover:not(.btn-add-active) {
+      background: #e6f4f2;
     }
     .btn-add-active {
       background: #0f766e;
@@ -203,6 +213,11 @@ import { UsersService } from '../../core/users.service';
       height: 32px;
       border-radius: 9999px;
       color: #9ca3af;
+      cursor: pointer;
+    }
+    .icon-btn:hover {
+      background: #f3f4f6;
+      color: #374151;
     }
     .icon-btn:active {
       background: #f3f4f6;
@@ -273,7 +288,7 @@ export class SettingsComponent {
         },
         error: (err) => {
           this.busyPassword.set(false);
-          this.toasts.error(ApiError.from(err).message);
+          firstApiErrorMessage(err, 'Не удалось сменить пароль').then((msg) => this.toasts.error(msg));
         },
       });
   }
@@ -302,7 +317,7 @@ export class SettingsComponent {
         },
         error: (err) => {
           this.busyAdd.set(false);
-          this.toasts.error(ApiError.from(err).message);
+          firstApiErrorMessage(err, 'Не удалось создать аккаунт').then((msg) => this.toasts.error(msg));
         },
       });
   }
@@ -340,7 +355,8 @@ export class SettingsComponent {
           this.cancelEdit();
           this.reload();
         },
-        error: (err) => this.toasts.error(ApiError.from(err).message),
+        error: (err) =>
+          firstApiErrorMessage(err, 'Не удалось обновить аккаунт').then((msg) => this.toasts.error(msg)),
       });
   }
 }

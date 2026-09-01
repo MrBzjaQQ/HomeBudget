@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace BudgetApi.Tests;
@@ -38,20 +40,53 @@ public class AuthTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Login_Success_ReturnsServerDateInTodayFormat()
+    {
+        var result = await SendAsync(HttpMethod.Post, "/api/auth/login", new { username = "admin", password = "admin123" });
+
+        Assert.Equal(200, result.Status);
+        var serverDate = result.GetProperty<string>("serverDate")!;
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", serverDate);
+        Assert.Equal(BudgetApi.Common.Validation.Today().ToString("yyyy-MM-dd"), serverDate);
+    }
+
+    [Fact]
     public async Task Me_ReturnsCurrentUser()
     {
         var result = await SendAsync(HttpMethod.Get, "/api/auth/me");
 
         Assert.Equal(200, result.Status);
-        Assert.Equal("admin", result.GetProperty<string>("username"));
+        Assert.Equal("admin", result.Json.GetProperty("user").GetProperty("username").GetString());
+        var serverDate = result.GetProperty<string>("serverDate")!;
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", serverDate);
+        Assert.Equal(BudgetApi.Common.Validation.Today().ToString("yyyy-MM-dd"), serverDate);
     }
 
     [Fact]
-    public async Task Me_WithoutToken_Returns401()
+    public async Task Me_WithoutToken_Returns401_WithJsonEnvelope()
     {
         using var anonymous = Factory.CreateClient();
         var result = await anonymous.GetAsync("/api/auth/me");
+        var raw = await result.Content.ReadAsStringAsync();
 
         Assert.Equal(System.Net.HttpStatusCode.Unauthorized, result.StatusCode);
+        Assert.Equal("Unauthorized", JsonDocument.Parse(raw).RootElement.GetProperty("code").GetString());
+        Assert.Contains("Требуется авторизация", raw);
+    }
+
+    [Fact]
+    public async Task Login_TokenLifetime_IsExactly24Hours()
+    {
+        var result = await SendAsync(HttpMethod.Post, "/api/auth/login", new { username = "admin", password = "admin123" });
+        var token = result.GetProperty<string>("token")!;
+        var payload = token.Split('.')[1];
+        payload += new string('=', (4 - payload.Length % 4) % 4);
+        var json = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+        using var doc = JsonDocument.Parse(json);
+
+        var exp = doc.RootElement.GetProperty("exp").GetInt64();
+        var iat = doc.RootElement.GetProperty("iat").GetInt64();
+
+        Assert.Equal(86_400, exp - iat);
     }
 }

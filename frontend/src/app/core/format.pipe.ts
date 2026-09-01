@@ -1,15 +1,19 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
+export function formatMoney(value: number): string {
+  return Math.abs(value).toLocaleString('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 @Pipe({ name: 'money' })
 export class MoneyPipe implements PipeTransform {
   transform(value: number | null | undefined, signed = false): string {
     if (value === null || value === undefined || Number.isNaN(value)) {
       return '0,00';
     }
-    const fixed = Math.abs(value).toLocaleString('ru-RU', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+    const fixed = formatMoney(value);
     if (signed && value !== 0) {
       return value > 0 ? `+${fixed}` : `−${fixed}`;
     }

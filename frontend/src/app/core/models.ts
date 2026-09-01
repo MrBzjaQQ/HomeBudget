@@ -11,6 +11,12 @@ export interface UserDto {
 export interface LoginResponse {
   token: string;
   user: UserDto;
+  serverDate?: string | null;
+}
+
+export interface MeResponse {
+  user: UserDto;
+  serverDate?: string | null;
 }
 
 export interface CategoryDto {
@@ -96,7 +102,7 @@ export interface SummaryMonthRow {
 export interface ApiErrorBody {
   code: string;
   message: string;
-  errors?: Record<string, string[]>;
+  errors?: Record<string, string | string[]>;
 }
 
 export class ApiError extends Error {
@@ -104,7 +110,7 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
-    public readonly errors?: Record<string, string[]>,
+    public readonly errors?: Record<string, string | string[]>,
   ) {
     super(message);
     this.name = 'ApiError';

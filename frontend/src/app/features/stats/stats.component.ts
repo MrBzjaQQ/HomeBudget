@@ -1,11 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { TooltipItem } from 'chart.js';
 import { BaseChartDirective } from 'ng2-charts';
+import { AuthService } from '../../core/auth.service';
 import { CategoriesService } from '../../core/categories.service';
 import { CategoryDto } from '../../core/models';
-import { MonthTitlePipe, MoneyPipe } from '../../core/format.pipe';
+import { MonthTitlePipe, MoneyPipe, formatMoney } from '../../core/format.pipe';
 import { ToastService } from '../../core/toast.service';
 import { TransactionsService } from '../../core/transactions.service';
 
@@ -45,13 +46,12 @@ const FALLBACK_COLORS = [
               baseChart
               [type]="'doughnut'"
               [data]="doughnutData()"
-              [labels]="doughnutLabels()"
               [options]="doughnutOptions"
               aria-label="Круговая диаграмма расходов"
             ></canvas>
             <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
               <span class="text-[11px] uppercase text-gray-400">всего</span>
-              <span class="text-lg font-bold text-gray-900">{{ expenseTotal() | money }}</span>
+              <span class="text-lg font-bold text-gray-900">{{ expenseTotal() | money }} ₽</span>
             </div>
           </div>
           <div class="mt-3 space-y-1.5">
@@ -59,7 +59,7 @@ const FALLBACK_COLORS = [
               <div class="flex items-center gap-2 text-sm">
                 <span class="h-2.5 w-2.5 rounded-full" [style.background]="s.color"></span>
                 <span class="flex-1 truncate text-gray-700">{{ s.label }}</span>
-                <span class="font-medium text-gray-900">{{ s.value | money }}</span>
+                <span class="font-medium text-gray-900">{{ s.value | money }} ₽</span>
                 <span class="w-11 text-right text-xs text-gray-400">{{ shareOf(s.value) }}%</span>
               </div>
             }
@@ -76,7 +76,7 @@ const FALLBACK_COLORS = [
             baseChart
             [type]="'bar'"
             [data]="barData()"
-            [options]="barOptions"
+            [options]="barOptions()"
             aria-label="Столбчатая диаграмма динамики"
           ></canvas>
         </div>
@@ -139,9 +139,11 @@ export class StatsComponent {
   private readonly cats = inject(CategoriesService);
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly auth = inject(AuthService);
 
   private readonly now = new Date();
-  protected readonly monthRef = signal({ year: this.now.getFullYear(), month: this.now.getMonth() + 1 });
+  private monthTouched = false;
+  protected readonly monthRef = signal(this.serverMonth() ?? { year: this.now.getFullYear(), month: this.now.getMonth() + 1 });
 
   private readonly catRows = signal<import('../../core/models').SummaryCategoryRow[]>([]);
   private readonly monthRows = signal<import('../../core/models').SummaryMonthRow[]>([]);
@@ -149,28 +151,44 @@ export class StatsComponent {
 
   protected readonly doughnutOptions = {
     cutout: '62%',
-    plugins: { legend: { display: false } },
-    maintainAspectRatio: false,
-  };
-
-  protected readonly barOptions = {
     plugins: {
-      legend: { display: true, position: 'bottom' as const },
+      legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx: TooltipItem<'bar'>) =>
-            ` ${ctx.dataset.label ?? ''}: ${(ctx.parsed.y ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽`,
+          title: (items: TooltipItem<'doughnut'>[]) => items[0]?.label ?? '',
+          label: (ctx: TooltipItem<'doughnut'>) => ` ${formatMoney(ctx.parsed)} ₽`,
         },
       },
     },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: { callback: (v: number | string) => Number(v).toLocaleString('ru-RU') },
-      },
-    },
     maintainAspectRatio: false,
   };
+
+  protected readonly barOptions = computed(() => {
+    const data = this.barData();
+    const max = data.datasets.reduce((acc, ds) => Math.max(acc, ...(ds.data as number[])), 0);
+    return {
+      plugins: {
+        legend: { display: true, position: 'bottom' as const },
+        tooltip: {
+          callbacks: {
+            label: (ctx: TooltipItem<'bar'>) =>
+              ` ${ctx.dataset.label ?? ''}: ${formatMoney(ctx.parsed.y ?? 0)} ₽`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          suggestedMax: max > 0 ? undefined : 100000,
+          ticks: {
+            maxTicksLimit: 6,
+            callback: (v: number | string) => Number(v).toLocaleString('ru-RU', { maximumFractionDigits: 2 }),
+          },
+        },
+      },
+      maintainAspectRatio: false,
+    };
+  });
 
   protected readonly expenseTotal = computed(() =>
     this.catRows().filter((r) => r.kind === 'EXPENSE').reduce((s, r) => s + r.expense, 0),
@@ -195,6 +213,7 @@ export class StatsComponent {
   });
 
   protected readonly doughnutData = computed(() => ({
+    labels: this.slices().map((s) => s.label),
     datasets: [
       {
         data: this.slices().map((s) => s.value),
@@ -202,8 +221,6 @@ export class StatsComponent {
       },
     ],
   }));
-
-  protected readonly doughnutLabels = computed(() => this.slices().map((s) => s.label));
 
   protected readonly topCategories = computed<TopCategory[]>(() => {
     const total = this.expenseTotal();
@@ -250,10 +267,29 @@ export class StatsComponent {
         this.categoryColorMap.set(map);
       },
     });
+    toObservable(this.auth.serverDate).subscribe((sd) => {
+      if (!sd || this.monthTouched) {
+        return;
+      }
+      const s = parseServerMonth(sd);
+      if (!s) {
+        return;
+      }
+      const cur = this.monthRef();
+      if (cur.year !== s.year || cur.month !== s.month) {
+        this.monthRef.set(s);
+        this.reload();
+      }
+    });
     this.reload();
   }
 
+  private serverMonth(): { year: number; month: number } | null {
+    return parseServerMonth(this.auth.serverDate());
+  }
+
   protected shiftMonth(delta: number): void {
+    this.monthTouched = true;
     this.monthRef.update((m) => {
       const d = new Date(m.year, m.month - 1 + delta, 1);
       return { year: d.getFullYear(), month: d.getMonth() + 1 };
@@ -322,4 +358,12 @@ export class StatsComponent {
 
 function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function parseServerMonth(sd: string | null): { year: number; month: number } | null {
+  if (!sd) {
+    return null;
+  }
+  const [y, m] = sd.split('-').map(Number);
+  return y && m >= 1 && m <= 12 ? { year: y, month: m } : null;
 }

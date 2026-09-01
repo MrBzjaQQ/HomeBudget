@@ -1,3 +1,4 @@
+using System.Text;
 using Xunit;
 
 namespace BudgetApi.Tests;
@@ -100,6 +101,106 @@ public class TransactionTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Create_NoteAbove500Chars_Returns400()
+    {
+        var foodId = await GetCategoryIdAsync("Продукты");
+
+        var result = await SendAsync(HttpMethod.Post, "/api/transactions", new
+        {
+            kind = "EXPENSE",
+            amount = 100,
+            date = Today.ToString("yyyy-MM-dd"),
+            categoryId = foodId,
+            note = new string('а', 501),
+        });
+
+        Assert.Equal(400, result.Status);
+        Assert.Equal("ValidationFailed", result.GetProperty<string>("code"));
+        TestAsserts.HasError(result, "note");
+    }
+
+    [Fact]
+    public async Task Create_NoteExactly500Chars_Returns201_AndStoresNote()
+    {
+        var foodId = await GetCategoryIdAsync("Продукты");
+        var note = new string('б', 500);
+
+        var created = await SendAsync(HttpMethod.Post, "/api/transactions", new
+        {
+            kind = "EXPENSE",
+            amount = 100,
+            date = Today.ToString("yyyy-MM-dd"),
+            categoryId = foodId,
+            note,
+        });
+
+        Assert.Equal(201, created.Status);
+        Assert.Equal(note, created.Json.GetProperty("note").GetString());
+
+        var deleted = await SendAsync(HttpMethod.Delete, $"/api/transactions/{created.Json.GetProperty("id").GetInt64()}");
+        Assert.Equal(204, deleted.Status);
+    }
+
+    [Fact]
+    public async Task Create_BadDateInBody_Returns400_WithoutNetInternals()
+    {
+        var foodId = await GetCategoryIdAsync("Продукты");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/transactions")
+        {
+            Content = new StringContent(
+                $"{{\"kind\":\"EXPENSE\",\"amount\":10,\"date\":\"2026-13-32\",\"categoryId\":{foodId}}}",
+                Encoding.UTF8,
+                "application/json"),
+        };
+        var response = await Client.SendAsync(request);
+        var raw = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(400, (int)response.StatusCode);
+        Assert.DoesNotContain("System.", raw);
+        Assert.DoesNotContain("\"request\"", raw);
+        Assert.Contains("Некорректная дата", raw);
+    }
+
+    [Fact]
+    public async Task Create_BadKindInBody_Returns400_WithoutNetInternals()
+    {
+        var foodId = await GetCategoryIdAsync("Продукты");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/transactions")
+        {
+            Content = new StringContent(
+                $"{{\"kind\":\"MIXED\",\"amount\":10,\"date\":\"{Today:yyyy-MM-dd}\",\"categoryId\":{foodId}}}",
+                Encoding.UTF8,
+                "application/json"),
+        };
+        var response = await Client.SendAsync(request);
+        var raw = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(400, (int)response.StatusCode);
+        Assert.DoesNotContain("System.", raw);
+        Assert.DoesNotContain("BudgetApi.", raw);
+        Assert.DoesNotContain("\"request\"", raw);
+        Assert.Contains("Некорректный тип операции", raw);
+    }
+
+    [Fact]
+    public async Task Create_MalformedJson_Returns400_WithoutNetInternals()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/transactions")
+        {
+            Content = new StringContent("'not json at all", Encoding.UTF8, "application/json"),
+        };
+        var response = await Client.SendAsync(request);
+        var raw = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(400, (int)response.StatusCode);
+        Assert.DoesNotContain("System.", raw);
+        Assert.DoesNotContain("\"request\"", raw);
+        Assert.Contains("Некорректные данные запроса", raw);
+    }
+
+    [Fact]
     public async Task List_Filters_Combine_AndTotalsMatch()
     {
         var foodId = await GetCategoryIdAsync("Продукты");
@@ -199,6 +300,37 @@ public class TransactionTests : ApiTestBase
     }
 
     [Fact]
+    public async Task List_CategoryIdGroup_ExpandsToChildSubcategories()
+    {
+        var groupId = await GetCategoryIdAsync("Продукты");
+        var childId = await GetCategoryIdAsync("Супермаркет", "Продукты");
+        var date = Today;
+        string dateStr = date.ToString("yyyy-MM-dd");
+
+        var created = await SendAsync(HttpMethod.Post, "/api/transactions", new { kind = "EXPENSE", amount = 555, date = dateStr, categoryId = childId, note = "групповой-тест" });
+        var id = created.Json.GetProperty("id").GetInt64();
+
+        try
+        {
+            var byGroup = await SendAsync(HttpMethod.Get, $"/api/transactions?from={dateStr}&to={dateStr}&categoryId={groupId}");
+            Assert.Equal(200, byGroup.Status);
+            var groupIds = byGroup.Json.GetProperty("items").EnumerateArray().Select(t => t.GetProperty("categoryId").GetInt32()).ToList();
+            Assert.Contains(childId, groupIds);
+
+            var byChild = await SendAsync(HttpMethod.Get, $"/api/transactions?from={dateStr}&to={dateStr}&categoryId={childId}");
+            Assert.Equal(200, byChild.Status);
+            var childIds = byChild.Json.GetProperty("items").EnumerateArray().Select(t => t.GetProperty("categoryId").GetInt32()).ToList();
+            Assert.Contains(childId, childIds);
+
+            Assert.True(byGroup.Json.GetProperty("total").GetInt32() >= byChild.Json.GetProperty("total").GetInt32());
+        }
+        finally
+        {
+            await SendAsync(HttpMethod.Delete, $"/api/transactions/{id}");
+        }
+    }
+
+    [Fact]
     public async Task Summary_ByMonth_ReturnsMonthKey()
     {
         var foodId = await GetCategoryIdAsync("Продукты");
@@ -213,5 +345,33 @@ public class TransactionTests : ApiTestBase
         var rows = result.Json.GetProperty("rows").EnumerateArray().Where(r => r.GetProperty("month").GetString() == expectedKey).ToList();
         Assert.Single(rows);
         Assert.Equal(300m, rows[0].GetProperty("expense").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Summary_InvalidGroupBy_Returns400()
+    {
+        var result = await SendAsync(HttpMethod.Get, "/api/transactions/summary?groupBy=day");
+
+        Assert.Equal(400, result.Status);
+        Assert.Equal("ValidationFailed", result.GetProperty<string>("code"));
+        Assert.Contains("groupBy", result.GetProperty<string>("message"));
+    }
+
+    [Fact]
+    public async Task Summary_ByMonth_ReturnsRowsInAscendingOrder()
+    {
+        var foodId = await GetCategoryIdAsync("Продукты");
+        var firstOfMonth = new DateOnly(Today.Year, Today.Month, 1);
+        var earlierDate = firstOfMonth.AddMonths(-1).AddDays(5);
+
+        await SendAsync(HttpMethod.Post, "/api/transactions", new { kind = "EXPENSE", amount = 10, date = earlierDate.ToString("yyyy-MM-dd"), categoryId = foodId });
+        await SendAsync(HttpMethod.Post, "/api/transactions", new { kind = "EXPENSE", amount = 20, date = Today.ToString("yyyy-MM-dd"), categoryId = foodId });
+
+        var result = await SendAsync(HttpMethod.Get, $"/api/transactions/summary?from={earlierDate:yyyy-MM-dd}&to={Today:yyyy-MM-dd}&groupBy=month");
+        Assert.Equal(200, result.Status);
+
+        var months = result.Json.GetProperty("rows").EnumerateArray().Select(r => r.GetProperty("month").GetString()!).ToList();
+        Assert.Equal(2, months.Count);
+        Assert.True(string.CompareOrdinal(months[0], months[1]) < 0, $"Expected ascending months, got {string.Join(", ", months)}");
     }
 }

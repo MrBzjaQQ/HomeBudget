@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { Router, provideRouter } from '@angular/router';
 import { FormGroup } from '@angular/forms';
+import { AuthService } from '../../core/auth.service';
 import { LoginComponent } from './login.component';
 
 @Component({ template: '<p>home</p>' })
@@ -62,6 +63,7 @@ describe('LoginComponent', () => {
       {
         token: 'jwt-token',
         user: { id: 1, username: 'admin', displayName: 'Админ', isActive: true, createdAt: '2026-01-01T00:00:00' },
+        serverDate: '2026-08-31',
       },
       { status: 200, statusText: 'OK' },
     );
@@ -69,6 +71,7 @@ describe('LoginComponent', () => {
 
     expect(localStorage.getItem('budget.token')).toBe('jwt-token');
     expect(router.url).toBe('/');
+    expect(TestBed.inject(AuthService).serverDate()).toBe('2026-08-31');
   });
 
   it('does not send request when form is invalid', () => {

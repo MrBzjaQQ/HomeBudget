@@ -36,7 +36,7 @@ public class TransactionsController(BudgetDbContext db) : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 500);
         page = Math.Max(page, 1);
 
-        var query = BuildFilteredQuery(from, to, userId, categoryId, kind, q);
+        var query = await BuildFilteredQueryAsync(from, to, userId, categoryId, kind, q, ct);
 
         var total = await query.CountAsync(ct);
 
@@ -98,13 +98,22 @@ public class TransactionsController(BudgetDbContext db) : ControllerBase
         [FromQuery] string? groupBy,
         CancellationToken ct = default)
     {
+        if (groupBy is not null
+            && !string.Equals(groupBy, "category", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(groupBy, "month", StringComparison.OrdinalIgnoreCase))
+        {
+            throw ApiErrorException.BadRequest("Некорректное значение groupBy (допустимо: category, month)");
+        }
+
         var group = string.Equals(groupBy, "month", StringComparison.OrdinalIgnoreCase) ? "month" : "category";
-        var query = BuildFilteredQuery(from, to, null, null, null, null);
+        var query = await BuildFilteredQueryAsync(from, to, null, null, null, null, ct);
 
         if (group == "month")
         {
             var monthRows = await query
                 .GroupBy(t => new { Y = t.TransactionDate.Year, M = t.TransactionDate.Month })
+                .OrderBy(g => g.Key.Y)
+                .ThenBy(g => g.Key.M)
                 .Select(g => new SummaryMonthDto(
                     $"{g.Key.Y:D4}-{g.Key.M:D2}",
                     g.Where(x => x.Kind == TransactionKind.Income).Sum(x => x.Amount),
@@ -140,7 +149,7 @@ public class TransactionsController(BudgetDbContext db) : ControllerBase
                     sums.Income,
                     sums.Expense);
             })
-            .OrderBy(r => r.Expense).ThenBy(r => r.Income)
+            .OrderBy(r => r.Expense).ThenBy(r => r.Income).ThenBy(r => r.Name)
             .ToList();
 
         return Ok(new SummaryResponse(group, rows));
@@ -227,13 +236,14 @@ public class TransactionsController(BudgetDbContext db) : ControllerBase
         return NoContent();
     }
 
-    private IQueryable<Transaction> BuildFilteredQuery(
+    private async Task<IQueryable<Transaction>> BuildFilteredQueryAsync(
         DateOnly? from,
         DateOnly? to,
         int? userId,
         List<int>? categoryIds,
         TransactionKind? kind,
-        string? search)
+        string? search,
+        CancellationToken ct)
     {
         var query = db.Transactions.AsNoTracking();
         if (from.HasValue)
@@ -253,7 +263,16 @@ public class TransactionsController(BudgetDbContext db) : ControllerBase
 
         if (categoryIds is { Count: > 0 })
         {
-            var ids = categoryIds.Distinct().ToList();
+            var ids = categoryIds.Distinct().ToHashSet();
+            var childIds = await db.Categories.AsNoTracking()
+                .Where(c => c.ParentId != null && ids.Contains(c.ParentId.Value))
+                .Select(c => c.Id)
+                .ToListAsync(ct);
+            foreach (var childId in childIds)
+            {
+                ids.Add(childId);
+            }
+
             query = query.Where(t => ids.Contains(t.CategoryId));
         }
 
@@ -354,13 +373,15 @@ public class TransactionsController(BudgetDbContext db) : ControllerBase
         }
 
         string? note = request.Note;
+        var noteOk = true;
         if (note is not null && note.Length > Validation.MaxNoteLength)
         {
-            errors["note"] = $"Комментарий не длиннее {Validation.MaxNoteLength} символов";
+            errors["note"] = $"Комментарий не может превышать {Validation.MaxNoteLength} символов";
             note = null;
+            noteOk = false;
         }
 
-        if (kind is null || amount is null || date is null || categoryId is null)
+        if (kind is null || amount is null || date is null || categoryId is null || !noteOk)
         {
             return null;
         }

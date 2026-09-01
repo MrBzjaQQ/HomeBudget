@@ -31,6 +31,28 @@ public class CategoryTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Create_SubcategoryUnderSubcategory_Returns400()
+    {
+        var group = await SendAsync(HttpMethod.Post, "/api/categories", new { name = "ТестГруппа3", kind = "EXPENSE" });
+        Assert.Equal(201, group.Status);
+        var groupId = group.Json.GetProperty("id").GetInt32();
+
+        var child = await SendAsync(HttpMethod.Post, "/api/categories", new { name = "ТестПод3", kind = "EXPENSE", parentId = groupId });
+        Assert.Equal(201, child.Status);
+        var childId = child.Json.GetProperty("id").GetInt32();
+
+        var grandchild = await SendAsync(HttpMethod.Post, "/api/categories", new { name = "ТестВнук", parentId = childId });
+        Assert.Equal(400, grandchild.Status);
+        Assert.Equal("ValidationFailed", grandchild.GetProperty<string>("code"));
+        TestAsserts.HasError(grandchild, "parentId");
+
+        var deletedChild = await SendAsync(HttpMethod.Delete, $"/api/categories/{childId}");
+        Assert.Equal(204, deletedChild.Status);
+        var deletedGroup = await SendAsync(HttpMethod.Delete, $"/api/categories/{groupId}");
+        Assert.Equal(204, deletedGroup.Status);
+    }
+
+    [Fact]
     public async Task Create_DuplicateNameInScope_Returns409()
     {
         var result = await SendAsync(HttpMethod.Post, "/api/categories", new { name = "Зарплата", kind = "INCOME" });

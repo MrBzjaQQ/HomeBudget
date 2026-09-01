@@ -26,9 +26,10 @@ interface NavItem {
             <a routerLink="/export" routerLinkActive="nav-link-active" class="nav-link">Экспорт</a>
             <a routerLink="/settings" routerLinkActive="nav-link-active" class="nav-link">Настройки</a>
           </nav>
-          <div class="ml-auto flex items-center gap-3">
+          <div class="ml-auto flex items-center gap-2 md:gap-3">
             <a routerLink="/transactions/new" class="btn-new-op hidden md:inline-flex">+ Операция</a>
-            <span class="text-sm text-gray-500">{{ auth.user()?.displayName }}</span>
+            <span class="max-w-28 truncate text-sm text-gray-500">{{ auth.user()?.displayName }}</span>
+            <button type="button" class="btn-logout" title="Выйти" (click)="logout()">Выйти</button>
           </div>
         </div>
       </header>
@@ -145,10 +146,30 @@ interface NavItem {
     .btn-new-op:hover {
       background: #0d5f59;
     }
+    .btn-logout {
+      cursor: pointer;
+      border-radius: 9999px;
+      border: 1px solid #e5e7eb;
+      background: white;
+      color: #6b7280;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 12px;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .btn-logout:hover {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #b91c1c;
+    }
   `,
 })
 export class ShellComponent {
   protected readonly auth = inject(AuthService);
+
+  protected logout(): void {
+    this.auth.logout();
+  }
 
   protected readonly nav: NavItem[] = [
     { path: '/', label: 'Журнал', icon: 'home' },

@@ -3,7 +3,7 @@ import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ExportService } from '../../core/export.service';
-import { ApiError } from '../../core/models';
+import { firstApiErrorMessage } from '../../core/http-errors';
 import { ToastService } from '../../core/toast.service';
 import { UsersService } from '../../core/users.service';
 import { UserDto } from '../../core/models';
@@ -24,16 +24,16 @@ type Scope = 'month' | 'year';
         <div class="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1">
           <button
             type="button"
-            class="rounded-lg py-2.5 text-sm font-semibold transition"
-            [class]="scope() === 'month' ? 'bg-white text-teal-800 shadow' : 'text-gray-500'"
+            class="scope-toggle rounded-lg py-2.5 text-sm font-semibold transition"
+            [class]="scope() === 'month' ? 'bg-white text-teal-800 shadow' : 'scope-off text-gray-500'"
             (click)="scope.set('month')"
           >
             Месяц
           </button>
           <button
             type="button"
-            class="rounded-lg py-2.5 text-sm font-semibold transition"
-            [class]="scope() === 'year' ? 'bg-white text-teal-800 shadow' : 'text-gray-500'"
+            class="scope-toggle rounded-lg py-2.5 text-sm font-semibold transition"
+            [class]="scope() === 'year' ? 'bg-white text-teal-800 shadow' : 'scope-off text-gray-500'"
             (click)="scope.set('year')"
           >
             Год
@@ -97,7 +97,7 @@ type Scope = 'month' | 'year';
         <ul class="mt-2 list-disc space-y-1 pl-5">
           <li>Месяц — один лист с операциями, итогами и расходами по категориям.</li>
           <li>Год — 12 листов (пустые месяцы — со нулями) + лист «Сводка» с накопительным остатком.</li>
-          <li>Шифр файла: Бюджет_ГГГГ-ММ.xlsx / Бюджет_ГГГГ.xlsx</li>
+          <li>Имя файла: Бюджет_ГГГГ-ММ.xlsx / Бюджет_ГГГГ.xlsx</li>
         </ul>
       </div>
     </div>
@@ -142,9 +142,20 @@ type Scope = 'month' | 'year';
       align-items: center;
       justify-content: center;
       gap: 8px;
+      cursor: pointer;
+    }
+    .btn-download:hover:not(:disabled) {
+      background: #0d5f59;
     }
     .btn-download:disabled {
       opacity: 0.6;
+      cursor: default;
+    }
+    .scope-toggle {
+      cursor: pointer;
+    }
+    .scope-off:hover {
+      background: #e5e7eb;
     }
     .spinner {
       width: 16px;
@@ -207,10 +218,12 @@ export class ExportComponent {
         this.busy.set(false);
         this.toasts.success('Файл сохранён');
       },
-      error: (err) => {
-        this.busy.set(false);
-        this.error.set(ApiError.from(err).message);
-      },
+       error: (err) => {
+         this.busy.set(false);
+         firstApiErrorMessage(err, 'Не удалось сформировать файл').then((msg) => {
+           this.error.set(msg);
+         });
+       },
     });
   }
 }

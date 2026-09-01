@@ -72,12 +72,22 @@ public class CategoriesController(BudgetDbContext db) : ControllerBase
         TransactionKind? kind = request.Kind;
         if (parentId.HasValue)
         {
-            var parent = await db.Categories.FirstOrDefaultAsync(c => c.Id == parentId.Value, ct)
-                ?? throw ApiErrorException.BadRequest("Родительская категория не найдена");
-            kind = parent.Kind;
-            if (request.Kind is not null && request.Kind != parent.Kind)
+            var parent = await db.Categories.FirstOrDefaultAsync(c => c.Id == parentId.Value, ct);
+            if (parent is null)
             {
-                errors["kind"] = "Тип подкатегории наследуется от группы";
+                errors["parentId"] = "Родительская категория не найдена";
+            }
+            else if (parent.ParentId is not null)
+            {
+                errors["parentId"] = "Подкатегория может быть создана только внутри группы";
+            }
+            else
+            {
+                kind = parent.Kind;
+                if (request.Kind is not null && request.Kind != parent.Kind)
+                {
+                    errors["kind"] = "Тип подкатегории наследуется от группы";
+                }
             }
         }
 

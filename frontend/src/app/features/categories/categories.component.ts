@@ -68,7 +68,7 @@ interface Section {
             </span>
             <button
               type="button"
-              class="text-xs font-medium text-teal-700"
+              class="btn-link text-xs font-medium text-teal-700"
               (click)="startCreate(section.kind)"
             >
               + группа
@@ -128,11 +128,13 @@ interface Section {
                     <span class="text-gray-300" *ngIf="cat.level > 0">— </span>{{ cat.name }}
                     <span class="ml-1 text-[10px] uppercase text-gray-300" *ngIf="cat.isArchived">архив</span>
                   </span>
-                  <button type="button" class="icon-btn" (click)="startCreateChild(cat)" title="Подкатегория">+</button>
+                  @if (cat.parentId === null) {
+                    <button type="button" class="icon-btn" (click)="startCreateChild(cat)" title="Подкатегория">+</button>
+                  }
                   <button type="button" class="icon-btn" (click)="startEdit(cat)" title="Изменить">✎</button>
                   <button
                     type="button"
-                    class="icon-btn"
+                    class="icon-btn icon-btn-danger"
                     (click)="toggleArchive(cat)"
                     [title]="cat.isArchived ? 'Восстановить' : 'В архив'"
                   >
@@ -162,6 +164,15 @@ interface Section {
       font-weight: 600;
       padding: 7px 14px;
     }
+    .btn-link {
+      border-radius: 6px;
+      padding: 2px 6px;
+      margin: -2px -6px;
+      cursor: pointer;
+    }
+    .btn-link:hover {
+      background: #e6f4f2;
+    }
     .icon-btn {
       display: flex;
       align-items: center;
@@ -171,9 +182,18 @@ interface Section {
       border-radius: 9999px;
       color: #9ca3af;
       font-size: 14px;
+      cursor: pointer;
+    }
+    .icon-btn:hover {
+      background: #f3f4f6;
+      color: #374151;
     }
     .icon-btn:active {
-      background: #f3f4f6;
+      background: #e5e7eb;
+    }
+    .icon-btn-danger:hover {
+      background: #fef2f2;
+      color: #dc2626;
     }
     .input {
       width: 100%;

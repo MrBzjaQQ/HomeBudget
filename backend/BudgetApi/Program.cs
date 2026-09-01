@@ -39,20 +39,11 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options 
 {
     options.InvalidModelStateResponseFactory = context =>
     {
-        var errors = new Dictionary<string, string>();
-        foreach (var entry in context.ModelState)
-        {
-            var messages = entry.Value?.Errors.Where(e => e.ErrorMessage is not null).Select(e => e.ErrorMessage!).ToList();
-            if (messages is { Count: > 0 })
-            {
-                errors[entry.Key] = string.Join("; ", messages);
-            }
-        }
-
+        var (message, errors) = ModelStateSanitizer.Sanitize(context.ModelState);
         var payload = new ApiError
         {
             Code = "ValidationFailed",
-            Message = "Некорректные данные",
+            Message = message,
             Errors = errors,
         };
         return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(payload);
@@ -101,6 +92,16 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Key)),
             ClockSkew = TimeSpan.FromSeconds(30),
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = context =>
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json; charset=utf-8";
+                return context.Response.WriteAsync("{\"code\":\"Unauthorized\",\"message\":\"Требуется авторизация\"}");
+            },
+        };
     });
 builder.Services.AddAuthorization();
 
@@ -135,7 +136,21 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        var path = ctx.Context.Request.Path.Value ?? string.Empty;
+        if (path.EndsWith(".html", System.StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.Headers.CacheControl = "no-cache";
+        }
+        else if (System.Text.RegularExpressions.Regex.IsMatch(path, @"-\w{8,}\.(?:js|css|svg|woff2?|ttf)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        }
+    },
+});
 app.MapFallback(async context =>
 {
     if (context.Request.Path.StartsWithSegments("/api"))
@@ -151,6 +166,7 @@ app.MapFallback(async context =>
     var indexPath = Path.Combine(webRoot, "index.html");
     if (System.IO.File.Exists(indexPath))
     {
+        context.Response.Headers.CacheControl = "no-cache";
         await context.Response.SendFileAsync(indexPath);
     }
     else

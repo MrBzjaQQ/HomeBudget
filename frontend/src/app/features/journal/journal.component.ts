@@ -4,7 +4,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth.service';
 import { CategoriesService, flattenCategoryTree } from '../../core/categories.service';
 import { ApiError, CategoryDto, TransactionDto, TransactionListResponse, TransactionListParams, TxnKind } from '../../core/models';
 import { MonthTitlePipe, MoneyPipe, RuDatePipe } from '../../core/format.pipe';
@@ -38,18 +39,30 @@ interface MonthRef {
               {{ monthRef() | monthTitle }}
             </div>
             <div class="text-base font-semibold text-gray-900" *ngIf="customRange()">
-              {{ rangeFrom() }} — {{ rangeTo() }}
+              {{ rangeFrom() | ruDate }} — {{ rangeTo() | ruDate }}
             </div>
             <div class="text-xs text-gray-400">журнал операций</div>
           </div>
-          <button
-            type="button"
-            class="icon-btn"
-            (click)="shiftMonth(1)"
-            aria-label="Следующий месяц"
-          >
-            ›
-          </button>
+          <div class="flex items-center gap-1.5">
+            @if (!customRange() && serverMonth()) {
+              <button
+                type="button"
+                class="today-btn"
+                [disabled]="isServerMonth()"
+                (click)="goToday()"
+              >
+                Сегодня
+              </button>
+            }
+            <button
+              type="button"
+              class="icon-btn"
+              (click)="shiftMonth(1)"
+              aria-label="Следующий месяц"
+            >
+              ›
+            </button>
+          </div>
         </div>
 
         @let t = totals();
@@ -57,11 +70,11 @@ interface MonthRef {
           <div class="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
             <div>
               <div class="text-[11px] uppercase tracking-wide text-gray-400">Доходы</div>
-              <div class="text-sm font-bold text-income sm:text-base">{{ t.income | money }}</div>
+              <div class="text-sm font-bold text-income sm:text-base">{{ t.income | money }} ₽</div>
             </div>
             <div class="text-center">
               <div class="text-[11px] uppercase tracking-wide text-gray-400">Расходы</div>
-              <div class="text-sm font-bold text-expense sm:text-base">{{ t.expense | money }}</div>
+              <div class="text-sm font-bold text-expense sm:text-base">{{ t.expense | money }} ₽</div>
             </div>
             <div class="text-right">
               <div class="text-[11px] uppercase tracking-wide text-gray-400">Остаток</div>
@@ -70,7 +83,7 @@ interface MonthRef {
                 [class.text-income]="t.net >= 0"
                 [class.text-expense]="t.net < 0"
               >
-                {{ t.net | money: true }}
+                {{ t.net | money: true }} ₽
               </div>
             </div>
           </div>
@@ -149,7 +162,10 @@ interface MonthRef {
                 {{ group.kind === 'INCOME' ? 'Доходы' : 'Расходы' }}
               </div>
               @for (cat of group.items; track cat.id) {
-                <label class="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm text-gray-700 hover:bg-white">
+                <label
+                  class="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm text-gray-700 hover:bg-white"
+                  [class.cat-sel]="isCatSelected(cat.id)"
+                >
                   <input
                     type="checkbox"
                     class="accent-teal-700"
@@ -169,7 +185,7 @@ interface MonthRef {
 
         <div class="flex flex-wrap items-center gap-2">
           <select
-            class="input h-9 text-sm"
+            class="input h-9"
             [value]="whoFilter() === null ? '' : whoFilter()"
             (change)="setWho($any($event.target).value)"
             aria-label="Кто"
@@ -181,13 +197,13 @@ interface MonthRef {
           </select>
           <input
             type="text"
-            class="input h-9 min-w-40 flex-1 text-sm"
+            class="input h-9 min-w-40 flex-1"
             placeholder="Поиск по комментарию…"
             [value]="searchInput()"
             (input)="searchInput.set($any($event.target).value)"
           />
           @if (hasFilters()) {
-            <button type="button" class="text-xs font-medium text-teal-700 underline" (click)="resetFilters()">
+            <button type="button" class="link-btn text-xs font-medium text-teal-700 underline" (click)="resetFilters()">
               сбросить
             </button>
           }
@@ -197,13 +213,13 @@ interface MonthRef {
           <div class="flex flex-wrap items-center gap-2">
             <label class="text-xs text-gray-500">
               с
-              <input type="date" class="input h-9 text-sm" [value]="rangeFrom()" (change)="setRangeFrom($any($event.target).value)" />
+              <input type="date" class="input h-9" [value]="rangeFrom()" (change)="setRangeFrom($any($event.target).value)" />
             </label>
             <label class="text-xs text-gray-500">
               по
-              <input type="date" class="input h-9 text-sm" [value]="rangeTo()" (change)="setRangeTo($any($event.target).value)" />
+              <input type="date" class="input h-9" [value]="rangeTo()" (change)="setRangeTo($any($event.target).value)" />
             </label>
-            <button type="button" class="text-xs font-medium text-teal-700 underline" (click)="toggleCustomRange()">
+            <button type="button" class="link-btn text-xs font-medium text-teal-700 underline" (click)="toggleCustomRange()">
               месяц
             </button>
           </div>
@@ -224,7 +240,7 @@ interface MonthRef {
             </a>
           </div>
         } @else {
-          <div class="divide-y divide-gray-100">
+          <div class="divide-y divide-gray-100 md:hidden">
             @for (t of d.items; track t.id) {
               <a
                 [routerLink]="['/transactions', t.id, 'edit']"
@@ -242,19 +258,18 @@ interface MonthRef {
                     {{ t.date | ruDate }} · {{ t.userDisplayName }}@if (t.note) { · {{ t.note }} }
                   </span>
                 </span>
-                 <span class="text-right">
-                   <span
-                     class="block text-sm font-bold"
-                     [class.text-income]="t.kind === 'INCOME'"
-                     [class.text-expense]="t.kind === 'EXPENSE'"
-                   >
-                     {{ t.amount | money }}
-                   </span>
-                  <span class="block text-[11px] text-gray-300 sm:hidden">₽</span>
+                <span class="text-right">
+                  <span
+                    class="block text-sm font-bold"
+                    [class.text-income]="t.kind === 'INCOME'"
+                    [class.text-expense]="t.kind === 'EXPENSE'"
+                  >
+                    {{ t.amount | money }} ₽
+                  </span>
                 </span>
                 <button
                   type="button"
-                  class="icon-btn text-gray-300 hover:text-red-600"
+                  class="icon-btn icon-btn-danger"
                   (click)="$event.preventDefault(); $event.stopPropagation(); remove(t)"
                   aria-label="Удалить"
                 >
@@ -262,6 +277,71 @@ interface MonthRef {
                 </button>
               </a>
             }
+          </div>
+
+          <div class="hidden md:block">
+            <table class="w-full border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-gray-100 text-left text-[11px] uppercase tracking-wide text-gray-400">
+                  <th class="px-3 py-2.5 font-semibold">Дата</th>
+                  <th class="px-3 py-2.5 font-semibold">Категория</th>
+                  <th class="px-3 py-2.5 font-semibold">Комментарий</th>
+                  <th class="px-3 py-2.5 font-semibold">Кто</th>
+                  <th class="px-3 py-2.5 text-right font-semibold">Сумма</th>
+                  <th class="w-20 px-3 py-2.5" aria-label="Действия"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (t of d.items; track t.id) {
+                  <tr
+                    class="cursor-pointer border-b border-gray-50 transition-colors last:border-0 hover:bg-gray-50"
+                    (click)="edit(t)"
+                  >
+                    <td class="whitespace-nowrap px-3 py-2.5 text-gray-600">{{ t.date | ruDate }}</td>
+                    <td class="px-3 py-2.5">
+                      <span class="flex items-center gap-2">
+                        <span
+                          class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                          [style.background]="t.color || '#d1d5db'"
+                        ></span>
+                        <span class="truncate font-medium text-gray-900">
+                          {{ t.categoryParentName ? t.categoryParentName + ' / ' + t.categoryName : t.categoryName }}
+                        </span>
+                      </span>
+                    </td>
+                    <td class="max-w-64 truncate px-3 py-2.5 text-gray-500">{{ t.note || '—' }}</td>
+                    <td class="whitespace-nowrap px-3 py-2.5 text-gray-600">{{ t.userDisplayName }}</td>
+                    <td
+                      class="whitespace-nowrap px-3 py-2.5 text-right font-bold"
+                      [class.text-income]="t.kind === 'INCOME'"
+                      [class.text-expense]="t.kind === 'EXPENSE'"
+                    >
+                      {{ t.amount | money }} ₽
+                    </td>
+                    <td class="px-2 py-1.5">
+                      <span class="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          class="icon-btn icon-btn-sm"
+                          (click)="$event.stopPropagation(); edit(t)"
+                          aria-label="Изменить"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          type="button"
+                          class="icon-btn icon-btn-sm icon-btn-danger"
+                          (click)="$event.stopPropagation(); remove(t)"
+                          aria-label="Удалить"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
           </div>
 
           @if (d.total > d.items.length) {
@@ -309,12 +389,33 @@ interface MonthRef {
       padding: 5px 12px;
       font-size: 13px;
       color: #4b5563;
+      cursor: pointer;
+    }
+    .chip:hover:not(.chip-active) {
+      background: #f3f4f6;
     }
     .chip-active {
       background: #0f766e;
       border-color: #0f766e;
       color: white;
       font-weight: 500;
+    }
+    .cat-sel {
+      background: #d1fae5;
+      color: #065f46;
+      font-weight: 600;
+    }
+    .cat-sel:hover {
+      background: #b5f0d2;
+    }
+    .link-btn {
+      border-radius: 6px;
+      padding: 2px 6px;
+      margin: -2px -6px;
+      cursor: pointer;
+    }
+    .link-btn:hover {
+      background: #e6f4f2;
     }
     .icon-btn {
       display: flex;
@@ -325,16 +426,51 @@ interface MonthRef {
       border-radius: 9999px;
       font-size: 20px;
       color: #6b7280;
+      cursor: pointer;
     }
-    .icon-btn:active {
+    .icon-btn:hover:not(:disabled) {
       background: #f3f4f6;
+      color: #374151;
+    }
+    .icon-btn:active:not(:disabled) {
+      background: #e5e7eb;
+    }
+    .icon-btn:disabled {
+      cursor: default;
+    }
+    .icon-btn-sm {
+      width: 28px;
+      height: 28px;
+      font-size: 14px;
+    }
+    .icon-btn-danger {
+      color: #d1d5db;
+    }
+    .icon-btn-danger:hover:not(:disabled) {
+      background: #fef2f2;
+      color: #dc2626;
+    }
+    .today-btn {
+      border-radius: 9999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #0f766e;
+      cursor: pointer;
+    }
+    .today-btn:hover:not(:disabled) {
+      background: #e6f4f2;
+    }
+    .today-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
     }
     .input {
       border: 1px solid #e5e7eb;
       border-radius: 10px;
       padding: 0 10px;
       background: white;
-      font-size: 14px;
+      font-size: 16px;
     }
     .input:focus {
       outline: 2px solid rgb(15 118 110 / 0.3);
@@ -348,11 +484,33 @@ export class JournalComponent {
   private readonly usersSvc = inject(UsersService);
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private monthTouched = false;
 
   private readonly now = new Date();
-  protected readonly monthRef = signal<MonthRef>({
+  protected readonly serverMonth = computed<MonthRef | null>(() => {
+    const sd = this.auth.serverDate();
+    if (!sd) {
+      return null;
+    }
+    const [y, m] = sd.split('-').map(Number);
+    if (!y || !m || m < 1 || m > 12) {
+      return null;
+    }
+    return { year: y, month: m };
+  });
+  protected readonly monthRef = signal<MonthRef>(this.serverMonth() ?? {
     year: this.now.getFullYear(),
     month: this.now.getMonth() + 1,
+  });
+  protected readonly isServerMonth = computed(() => {
+    const s = this.serverMonth();
+    if (!s) {
+      return false;
+    }
+    const m = this.monthRef();
+    return m.year === s.year && m.month === s.month;
   });
   protected readonly customRange = signal(false);
   protected readonly rangeFrom = signal<string>(fmtDate(new Date(this.now.getFullYear(), this.now.getMonth(), 1)));
@@ -383,7 +541,9 @@ export class JournalComponent {
       this.kindFilter() !== null ||
       this.selectedCats().length > 0 ||
       this.searchInput() !== '' ||
-      this.customRange(),
+      this.customRange() ||
+      this.sort() !== 'date' ||
+      this.dir() !== 'desc',
   );
 
   protected readonly totalPages = computed(() => {
@@ -399,6 +559,17 @@ export class JournalComponent {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((q) => this.debouncedQ.set(q ?? ''));
+
+    effect(() => {
+      const s = this.serverMonth();
+      if (!s || this.monthTouched) {
+        return;
+      }
+      const m = this.monthRef();
+      if (m.year !== s.year || m.month !== s.month) {
+        this.monthRef.set(s);
+      }
+    });
 
     effect(() => {
       const p = this.buildParams();
@@ -447,11 +618,27 @@ export class JournalComponent {
     if (this.customRange()) {
       return;
     }
+    this.monthTouched = true;
     this.monthRef.update((m) => {
       const d = new Date(m.year, m.month - 1 + delta, 1);
       return { year: d.getFullYear(), month: d.getMonth() + 1 };
     });
     this.page.set(1);
+  }
+
+  protected goToday(): void {
+    const s = this.serverMonth();
+    if (!s) {
+      return;
+    }
+    this.customRange.set(false);
+    this.monthRef.set(s);
+    this.monthTouched = true;
+    this.page.set(1);
+  }
+
+  protected edit(t: TransactionDto): void {
+    this.router.navigate(['/transactions', t.id, 'edit']);
   }
 
   protected toggleCustomRange(): void {
@@ -513,8 +700,11 @@ export class JournalComponent {
     this.debouncedQ.set('');
     this.customRange.set(false);
     this.catPanelOpen.set(false);
-    const d = new Date();
-    this.monthRef.set({ year: d.getFullYear(), month: d.getMonth() + 1 });
+    this.sort.set('date');
+    this.dir.set('desc');
+    const s = this.serverMonth();
+    this.monthRef.set(s ?? { year: this.now.getFullYear(), month: this.now.getMonth() + 1 });
+    this.monthTouched = true;
     this.page.set(1);
   }
 

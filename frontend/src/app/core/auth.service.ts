@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, tap } from 'rxjs';
-import { LoginResponse, UserDto } from './models';
+import { LoginResponse, MeResponse, UserDto } from './models';
 
 const TOKEN_KEY = 'budget.token';
 const USER_KEY = 'budget.user';
@@ -14,6 +14,7 @@ export class AuthService {
 
   readonly token = signal<string | null>(localStorage.getItem(TOKEN_KEY));
   readonly user = signal<UserDto | null>(readStoredUser());
+  readonly serverDate = signal<string | null>(null);
   readonly isLoggedIn = computed(() => this.token() !== null);
 
   login(username: string, password: string): Observable<LoginResponse> {
@@ -25,8 +26,21 @@ export class AuthService {
           localStorage.setItem(USER_KEY, JSON.stringify(res.user));
           this.token.set(res.token);
           this.user.set(res.user);
+          this.serverDate.set(res.serverDate ?? null);
         }),
       );
+  }
+
+  refreshMe(): Observable<MeResponse> {
+    return this.http.get<MeResponse>('/api/auth/me').pipe(
+      tap((res) => {
+        if (res && res.user) {
+          localStorage.setItem(USER_KEY, JSON.stringify(res.user));
+          this.user.set(res.user);
+        }
+        this.serverDate.set(res?.serverDate ?? null);
+      }),
+    );
   }
 
   logout(): void {
@@ -34,6 +48,7 @@ export class AuthService {
     localStorage.removeItem(USER_KEY);
     this.token.set(null);
     this.user.set(null);
+    this.serverDate.set(null);
     this.router.navigate(['/login']);
   }
 
@@ -44,6 +59,7 @@ export class AuthService {
       this.token.set(null);
       this.user.set(null);
     }
+    this.serverDate.set(null);
     this.router.navigate(['/login']);
   }
 }

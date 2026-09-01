@@ -30,12 +30,12 @@ public class AuthController(BudgetDbContext db, JwtTokenService tokenService) : 
         }
 
         var token = tokenService.CreateToken(user);
-        return Ok(new LoginResponse(token, UserDtos.ToDto(user)));
+        return Ok(new LoginResponse(token, UserDtos.ToDto(user), ServerDate()));
     }
 
     [Authorize]
     [HttpGet("me")]
-    public async Task<ActionResult<UserDto>> Me(CancellationToken ct)
+    public async Task<ActionResult<MeResponse>> Me(CancellationToken ct)
     {
         var id = User.GetUserId();
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
@@ -44,8 +44,10 @@ public class AuthController(BudgetDbContext db, JwtTokenService tokenService) : 
             throw ApiErrorException.Unauthorized();
         }
 
-        return Ok(UserDtos.ToDto(user));
+        return Ok(new MeResponse(UserDtos.ToDto(user), ServerDate()));
     }
+
+    private static string ServerDate() => Validation.Today().ToString("yyyy-MM-dd");
 }
 
 public class LoginRequest
@@ -54,8 +56,11 @@ public class LoginRequest
     public string? Password { get; set; }
 }
 
-public class LoginResponse(string token, UserDto user)
+public class LoginResponse(string token, UserDto user, string serverDate)
 {
     public string Token { get; } = token;
     public UserDto User { get; } = user;
+    public string ServerDate { get; } = serverDate;
 }
+
+public record MeResponse(UserDto User, string ServerDate);
