@@ -59,15 +59,26 @@ import { UsersService } from '../../core/users.service';
               <div>
                 <label class="field-label">Логин</label>
                 <input type="text" formControlName="username" class="input" autocomplete="off" />
+                @if (addForm.controls.username.invalid && addForm.controls.username.touched) {
+                  <div class="err">Введите логин</div>
+                }
               </div>
               <div>
                 <label class="field-label">Имя</label>
                 <input type="text" formControlName="displayName" class="input" />
+                @if (addForm.controls.displayName.invalid && addForm.controls.displayName.touched) {
+                  <div class="err">Введите имя</div>
+                }
               </div>
             </div>
             <div>
               <label class="field-label">Пароль</label>
               <input type="password" formControlName="password" class="input" autocomplete="new-password" />
+              @if (addForm.controls.password.invalid && addForm.controls.password.touched) {
+                <div class="err">
+                  {{ addForm.controls.password.hasError('minlength') ? 'Пароль — минимум 6 символов' : 'Введите пароль' }}
+                </div>
+              }
             </div>
             <button type="submit" [disabled]="busyAdd()" class="btn-primary w-full">
               {{ busyAdd() ? 'Создание…' : 'Создать аккаунт' }}
@@ -303,9 +314,15 @@ export class SettingsComponent {
       return;
     }
     const v = this.addForm.getRawValue();
+    const username = v.username.trim();
+    const displayName = v.displayName.trim();
+    if (username === '' || displayName === '') {
+      this.addForm.markAllAsTouched();
+      return;
+    }
     this.busyAdd.set(true);
     this.usersSvc
-      .create({ username: v.username, displayName: v.displayName, password: v.password })
+      .create({ username, displayName, password: v.password })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {

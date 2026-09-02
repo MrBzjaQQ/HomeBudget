@@ -60,19 +60,18 @@ describe('TransactionFormComponent', () => {
   let ctrl: FormCtrl;
   let serverDateSignal: { set(v: string | null): void };
 
-  beforeEach(async () => {
-    localStorage.clear();
-    createCalls = [];
+  function configureTestBed(usersList: UserDto[], logged: UserDto) {
     const sd = signal<string | null>(SERVER_DATE);
     serverDateSignal = sd;
-    await TestBed.configureTestingModule({
+    createCalls = [];
+    return TestBed.configureTestingModule({
       imports: [TransactionFormComponent],
       providers: [
         provideRouter([
           { path: '', component: StubComponent },
           { path: '**', component: StubComponent },
         ]),
-        { provide: AuthService, useValue: { serverDate: sd } },
+        { provide: AuthService, useValue: { serverDate: sd, user: () => logged } },
         {
           provide: TransactionsService,
           useValue: {
@@ -123,10 +122,15 @@ describe('TransactionFormComponent', () => {
               ]),
           },
         },
-        { provide: UsersService, useValue: { list: () => of([user]) } },
+        { provide: UsersService, useValue: { list: () => of(usersList) } },
         ToastService,
       ],
     });
+  }
+
+  beforeEach(async () => {
+    localStorage.clear();
+    await configureTestBed([user], user);
     fixture = TestBed.createComponent(TransactionFormComponent);
     ctrl = fixture.componentInstance as unknown as FormCtrl;
     fixture.detectChanges();
@@ -164,6 +168,22 @@ describe('TransactionFormComponent', () => {
     fillForm('100');
     ctrl.save();
     expect(TestBed.inject(Router).url).toBe('/');
+  });
+
+  it('defaults the owner to the logged-in user, not the first in the list', async () => {
+    TestBed.resetTestingModule();
+    const second: UserDto = {
+      id: 2,
+      username: 'anna',
+      displayName: 'Анна',
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00',
+    };
+    await configureTestBed([user, second], second);
+    const f2 = TestBed.createComponent(TransactionFormComponent);
+    f2.detectChanges();
+    const c2 = f2.componentInstance as unknown as FormCtrl;
+    expect(c2.form.controls['userId'].value).toBe(2);
   });
 
   it('groups categories: subs nested under group, childless group is a plain pill', () => {

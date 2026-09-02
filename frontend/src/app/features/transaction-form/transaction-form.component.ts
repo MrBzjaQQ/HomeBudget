@@ -361,7 +361,9 @@ export class TransactionFormComponent implements OnInit {
         const active = list.filter((u) => u.isActive);
         this.users.set(active);
         if (this.form.controls.userId.value === 0 && active.length > 0) {
-          this.form.controls.userId.setValue(active[0].id);
+          const me = this.auth.user();
+          const defaultUser = active.find((u) => u.id === me?.id) ?? active[0];
+          this.form.controls.userId.setValue(defaultUser.id);
         }
       },
       error: () => this.toasts.error('Не удалось загрузить пользователей'),

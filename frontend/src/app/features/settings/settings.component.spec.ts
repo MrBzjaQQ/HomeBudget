@@ -13,6 +13,7 @@ const wife: UserDto = { id: 2, username: 'anna', displayName: 'Анна', isActi
 type SettingsCtrl = {
   addForm: FormGroup;
   addUser(): void;
+  toggleAdd(): void;
   startEdit(u: UserDto): void;
   draftName: { set(v: string): void };
   saveUser(u: UserDto): void;
@@ -21,10 +22,12 @@ type SettingsCtrl = {
 describe('SettingsComponent', () => {
   let createFail: boolean;
   let updateFail: boolean;
+  let createCalls: CreateUserPayload[];
 
   beforeEach(async () => {
     createFail = false;
     updateFail = false;
+    createCalls = [];
     await TestBed.configureTestingModule({
       imports: [SettingsComponent],
       providers: [
@@ -33,8 +36,9 @@ describe('SettingsComponent', () => {
           provide: UsersService,
           useValue: {
             list: () => of([admin, wife]),
-            create: (p: CreateUserPayload) =>
-              createFail
+            create: (p: CreateUserPayload) => {
+              createCalls.push(p);
+              return createFail
                 ? throwError(() => ({
                     status: 400,
                     error: {
@@ -43,7 +47,8 @@ describe('SettingsComponent', () => {
                       errors: { username: 'Такой логин уже занят' },
                     },
                   }))
-                : of({ ...admin, id: 3, username: p.username, displayName: p.displayName }),
+                : of({ ...admin, id: 3, username: p.username, displayName: p.displayName });
+            },
             update: (_id: number, _p: UpdateUserPayload) =>
               updateFail
                 ? throwError(() => ({
@@ -89,5 +94,43 @@ describe('SettingsComponent', () => {
 
     const list = TestBed.inject(ToastService).toasts();
     expect(list.some((t) => t.kind === 'error' && t.message === 'Пароль слишком короткий')).toBe(true);
+  });
+
+  it('shows a validation error and does not call the backend when the password is too short', () => {
+    const { component: c, fixture } = comp();
+    c.toggleAdd();
+    c.addForm.patchValue({ username: 'qalive', displayName: 'QA', password: '12345' });
+    c.addUser();
+    fixture.detectChanges();
+
+    expect(createCalls.length).toBe(0);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Пароль — минимум 6 символов');
+  });
+
+  it('shows all required-field errors when submitting an empty form', () => {
+    const { component: c, fixture } = comp();
+    c.toggleAdd();
+    c.addUser();
+    fixture.detectChanges();
+
+    expect(createCalls.length).toBe(0);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Введите логин');
+    expect(el.textContent).toContain('Введите имя');
+    expect(el.textContent).toContain('Введите пароль');
+  });
+
+  it('creates the account and shows a success toast when all fields are valid', async () => {
+    const { component: c } = comp();
+    c.toggleAdd();
+    c.addForm.patchValue({ username: 'qalive', displayName: 'QA Live', password: 'qapass1' });
+    c.addUser();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(createCalls.length).toBe(1);
+    expect(createCalls[0].username).toBe('qalive');
+    const list = TestBed.inject(ToastService).toasts();
+    expect(list.some((t) => t.kind === 'success' && t.message === 'Аккаунт создан')).toBe(true);
   });
 });
