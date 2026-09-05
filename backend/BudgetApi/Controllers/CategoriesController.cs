@@ -197,6 +197,12 @@ public class CategoriesController(BudgetDbContext db) : ControllerBase
             throw ApiErrorException.Conflict("Сначала удалите или перенесите подкатегории");
         }
 
+        var hasBudgetItems = await db.BudgetItems.AnyAsync(b => b.CategoryId == id, ct);
+        if (hasBudgetItems)
+        {
+            throw ApiErrorException.Conflict("В категории есть плановые бюджеты — сначала удалите их");
+        }
+
         var hasTransactions = await db.Transactions.AnyAsync(t => t.CategoryId == id, ct);
         if (hasTransactions)
         {

@@ -22,6 +22,8 @@ interface NavItem {
               Журнал
             </a>
             <a routerLink="/stats" routerLinkActive="nav-link-active" class="nav-link">Аналитика</a>
+            <a routerLink="/budget" routerLinkActive="nav-link-active" class="nav-link">Бюджет</a>
+            <a routerLink="/savings" routerLinkActive="nav-link-active" class="nav-link">Накопления</a>
             <a routerLink="/categories" routerLinkActive="nav-link-active" class="nav-link">Категории</a>
             <a routerLink="/export" routerLinkActive="nav-link-active" class="nav-link">Экспорт</a>
             <a routerLink="/settings" routerLinkActive="nav-link-active" class="nav-link">Настройки</a>
@@ -46,6 +48,7 @@ interface NavItem {
             <a
               [routerLink]="item.path"
               routerLinkActive="nav-active"
+              [routerLinkActiveOptions]="{ exact: true }"
               [class]="item.path === '/transactions/new' ? 'nav-plus' : 'nav-item'"
               [attr.aria-label]="item.label"
             >
@@ -70,8 +73,9 @@ interface NavItem {
                       stroke-linecap="round"
                     />
                     <path
-                      *ngSwitchCase="'folder'"
-                      d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+                      *ngSwitchCase="'calendar'"
+                      d="M8 3v4M16 3v4M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM3 11h18"
+                      stroke-linecap="round"
                       stroke-linejoin="round"
                     />
                     <path
@@ -173,9 +177,9 @@ export class ShellComponent {
 
   protected readonly nav: NavItem[] = [
     { path: '/', label: 'Журнал', icon: 'home' },
-    { path: '/stats', label: 'Аналитика', icon: 'chart' },
+    { path: '/budget', label: 'Бюджет', icon: 'calendar' },
     { path: '/transactions/new', label: 'Добавить', icon: '' },
-    { path: '/categories', label: 'Категории', icon: 'folder' },
+    { path: '/stats', label: 'Аналитика', icon: 'chart' },
     { path: '/more', label: 'Ещё', icon: 'more' },
   ];
 }

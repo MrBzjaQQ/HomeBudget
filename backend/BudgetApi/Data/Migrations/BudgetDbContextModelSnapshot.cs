@@ -22,6 +22,60 @@ namespace BudgetApi.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("BudgetApi.Data.Entities.BudgetItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("integer")
+                        .HasColumnName("category_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateOnly>("Month")
+                        .HasColumnType("date")
+                        .HasColumnName("month");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("pk_budget_items");
+
+                    b.HasIndex("CategoryId")
+                        .HasDatabaseName("ix_budget_items_category_id");
+
+                    b.HasIndex("Month", "CategoryId")
+                        .HasDatabaseName("idx_budget_month_category");
+
+                    b.ToTable("budget_items", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_budget_amount_positive", "amount > 0");
+                        });
+                });
+
             modelBuilder.Entity("BudgetApi.Data.Entities.Category", b =>
                 {
                     b.Property<int>("Id")
@@ -84,6 +138,110 @@ namespace BudgetApi.Data.Migrations
                         .HasDatabaseName("ix_categories_name_kind_parent_id");
 
                     b.ToTable("categories", (string)null);
+                });
+
+            modelBuilder.Entity("BudgetApi.Data.Entities.SavingsContainer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("color");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id")
+                        .HasName("pk_savings_containers");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("uq_savings_container_name");
+
+                    b.ToTable("savings_containers", (string)null);
+                });
+
+            modelBuilder.Entity("BudgetApi.Data.Entities.SavingsEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<int>("ContainerId")
+                        .HasColumnType("integer")
+                        .HasColumnName("container_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateOnly>("Month")
+                        .HasColumnType("date")
+                        .HasColumnName("month");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_savings_entries");
+
+                    b.HasIndex("ContainerId")
+                        .HasDatabaseName("ix_savings_entries_container_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_savings_entries_user_id");
+
+                    b.HasIndex("Month", "ContainerId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_savings_month_container_user");
+
+                    b.ToTable("savings_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_savings_amount_positive", "amount > 0");
+                        });
                 });
 
             modelBuilder.Entity("BudgetApi.Data.Entities.Transaction", b =>
@@ -202,6 +360,18 @@ namespace BudgetApi.Data.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("BudgetApi.Data.Entities.BudgetItem", b =>
+                {
+                    b.HasOne("BudgetApi.Data.Entities.Category", "Category")
+                        .WithMany("BudgetItems")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_budget_items_categories_category_id");
+
+                    b.Navigation("Category");
+                });
+
             modelBuilder.Entity("BudgetApi.Data.Entities.Category", b =>
                 {
                     b.HasOne("BudgetApi.Data.Entities.Category", "Parent")
@@ -211,6 +381,27 @@ namespace BudgetApi.Data.Migrations
                         .HasConstraintName("fk_categories_categories_parent_id");
 
                     b.Navigation("Parent");
+                });
+
+            modelBuilder.Entity("BudgetApi.Data.Entities.SavingsEntry", b =>
+                {
+                    b.HasOne("BudgetApi.Data.Entities.SavingsContainer", "Container")
+                        .WithMany("Entries")
+                        .HasForeignKey("ContainerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_savings_entries_savings_containers_container_id");
+
+                    b.HasOne("BudgetApi.Data.Entities.User", "User")
+                        .WithMany("SavingsEntries")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_savings_entries_users_user_id");
+
+                    b.Navigation("Container");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("BudgetApi.Data.Entities.Transaction", b =>
@@ -236,9 +427,21 @@ namespace BudgetApi.Data.Migrations
 
             modelBuilder.Entity("BudgetApi.Data.Entities.Category", b =>
                 {
+                    b.Navigation("BudgetItems");
+
                     b.Navigation("Children");
 
                     b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("BudgetApi.Data.Entities.SavingsContainer", b =>
+                {
+                    b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("BudgetApi.Data.Entities.User", b =>
+                {
+                    b.Navigation("SavingsEntries");
                 });
 #pragma warning restore 612, 618
         }

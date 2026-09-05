@@ -38,6 +38,18 @@ export const routes: Routes = [
           import('./features/stats/stats.component').then((m) => m.StatsComponent),
         title: 'Аналитика — Бюджет',
       },
+      {
+        path: 'budget',
+        loadComponent: () =>
+          import('./features/budget/budget.component').then((m) => m.BudgetComponent),
+        title: 'Бюджет — Бюджет',
+      },
+      {
+        path: 'savings',
+        loadComponent: () =>
+          import('./features/savings/savings.component').then((m) => m.SavingsComponent),
+        title: 'Накопления — Бюджет',
+      },
       { path: 'categories', component: CategoriesComponent, title: 'Категории — Бюджет' },
       { path: 'export', component: ExportComponent, title: 'Экспорт — Бюджет' },
       { path: 'settings', component: SettingsComponent, title: 'Настройки — Бюджет' },

@@ -1,12 +1,19 @@
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { TooltipItem } from 'chart.js';
+import { ScriptableScaleContext, TooltipItem } from 'chart.js';
 import { BaseChartDirective } from 'ng2-charts';
 import { AuthService } from '../../core/auth.service';
+import { BudgetService } from '../../core/budget.service';
 import { CategoriesService } from '../../core/categories.service';
-import { CategoryDto } from '../../core/models';
+import {
+  BudgetCategoryRow,
+  BudgetTotalsDto,
+  CategoryDto,
+  SavingsYearSummary,
+} from '../../core/models';
 import { MonthTitlePipe, MoneyPipe, formatMoney } from '../../core/format.pipe';
+import { SavingsService } from '../../core/savings.service';
 import { ToastService } from '../../core/toast.service';
 import { TransactionsService } from '../../core/transactions.service';
 
@@ -66,6 +73,99 @@ const FALLBACK_COLORS = [
           </div>
         } @else {
           <div class="py-8 text-center text-sm text-gray-400">Расходов за месяц нет</div>
+        }
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">План по категориям</h2>
+        @if (budgetRows().length > 0) {
+          <div class="space-y-2">
+            @for (r of budgetRows(); track r.categoryId) {
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="h-2.5 w-2.5 shrink-0 rounded-full" [style.background]="r.color || '#d1d5db'"></span>
+                  <span class="min-w-0 flex-1 truncate text-sm text-gray-700">{{ rowLabel(r) }}</span>
+                  <span
+                    class="whitespace-nowrap text-sm font-semibold"
+                    [class.text-income]="r.diff >= 0"
+                    [class.text-expense]="r.diff < 0"
+                  >
+                    {{ r.diff | money }} ₽
+                  </span>
+                </div>
+                <div class="mt-0.5 flex items-center gap-3 pl-4 text-xs text-gray-500">
+                  <span>план {{ r.planned | money }} ₽</span>
+                  <span>факт {{ r.actual | money }} ₽</span>
+                </div>
+              </div>
+            }
+          </div>
+          @let totals = budgetTotals();
+          @if (totals) {
+            <div class="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-2.5">
+              <div>
+                <div class="text-[11px] uppercase text-gray-400">План</div>
+                <div class="text-sm font-semibold text-gray-900">{{ totals.planned | money }} ₽</div>
+              </div>
+              <div>
+                <div class="text-[11px] uppercase text-gray-400">Расходы</div>
+                <div class="text-sm font-semibold text-gray-900">{{ totals.actual | money }} ₽</div>
+              </div>
+              <div>
+                <div class="text-[11px] uppercase text-gray-400">Разница</div>
+                <div
+                  class="text-sm font-semibold"
+                  [class.text-income]="totals.diff >= 0"
+                  [class.text-expense]="totals.diff < 0"
+                >
+                  {{ totals.diff | money }} ₽
+                </div>
+              </div>
+            </div>
+          }
+        } @else {
+          <div class="py-8 text-center text-sm text-gray-400">План на месяц не настроен</div>
+        }
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Накопления за {{ monthRef().year }}</h2>
+        @let savings = savingsSummary();
+        @if (!savings) {
+          <div class="py-8 text-center text-sm text-gray-400">Загрузка…</div>
+        } @else if (savings.total === 0 && savings.byMember.length === 0) {
+          <div class="py-8 text-center text-sm text-gray-400">Накоплений за год нет</div>
+        } @else {
+          <div class="h-48">
+            <canvas
+              baseChart
+              [type]="'line'"
+              [data]="savingsLineData()"
+              [options]="savingsLineOptions"
+              aria-label="График накоплений по месяцам года"
+            ></canvas>
+          </div>
+          <div class="mt-4 h-48">
+            <canvas
+              baseChart
+              [type]="'bar'"
+              [data]="savingsDeltaData()"
+              [options]="savingsDeltaOptions"
+              aria-label="Столбчатая диаграмма изменения к прошлому месяцу"
+            ></canvas>
+          </div>
+          <div class="mt-3 space-y-1.5">
+            @for (m of savings.byMember; track m.userId) {
+              <div class="flex items-center gap-2 text-sm">
+                <span class="min-w-0 flex-1 truncate text-gray-700">{{ m.userName }}</span>
+                <span class="font-medium text-gray-900">{{ m.amount | money }} ₽</span>
+              </div>
+            }
+            <div class="flex items-center gap-2 border-t border-gray-100 pt-2 text-sm">
+              <span class="flex-1 font-semibold text-gray-900">Суммарно</span>
+              <span class="font-bold text-brand">{{ savings.total | money }} ₽</span>
+            </div>
+          </div>
         }
       </div>
 
@@ -137,6 +237,8 @@ const FALLBACK_COLORS = [
 export class StatsComponent {
   private readonly txns = inject(TransactionsService);
   private readonly cats = inject(CategoriesService);
+  private readonly budget = inject(BudgetService);
+  private readonly savings = inject(SavingsService);
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
@@ -148,6 +250,11 @@ export class StatsComponent {
   private readonly catRows = signal<import('../../core/models').SummaryCategoryRow[]>([]);
   private readonly monthRows = signal<import('../../core/models').SummaryMonthRow[]>([]);
   private readonly categoryColorMap = signal<Map<number, string>>(new Map());
+
+  protected readonly budgetRows = signal<BudgetCategoryRow[]>([]);
+  protected readonly budgetTotals = signal<BudgetTotalsDto | null>(null);
+
+  protected readonly savingsSummary = signal<SavingsYearSummary | null>(null);
 
   protected readonly doughnutOptions = {
     cutout: '62%',
@@ -249,6 +356,87 @@ export class StatsComponent {
     };
   });
 
+  protected readonly savingsLineData = computed(() => {
+    const summary = this.savingsSummary();
+    if (!summary) {
+      return { labels: [] as string[], datasets: [] as { data: number[] }[] };
+    }
+    return {
+      labels: summary.months.map((m) => this.monthLabel(m.month)),
+      datasets: [
+        {
+          data: summary.months.map((m) => m.amount),
+          borderColor: '#0f766e',
+          backgroundColor: 'rgba(15,118,110,0.12)',
+          fill: true,
+          tension: 0.3,
+        },
+      ],
+    };
+  });
+
+  protected readonly savingsDeltaData = computed(() => {
+    const summary = this.savingsSummary();
+    if (!summary) {
+      return { labels: [] as string[], datasets: [] as { data: number[] }[] };
+    }
+    return {
+      labels: summary.deltas.map((d) => this.monthLabel(d.month)),
+      datasets: [
+        {
+          data: summary.deltas.map((d) => d.delta),
+          borderRadius: 6,
+          backgroundColor: summary.deltas.map((d) => (d.delta >= 0 ? '#0f766e' : '#ef4444')),
+        },
+      ],
+    };
+  });
+
+  protected readonly savingsLineOptions = {
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          maxTicksLimit: 6,
+          callback: (v: number | string) => Number(v).toLocaleString('ru-RU', { maximumFractionDigits: 2 }),
+        },
+      },
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx: TooltipItem<'line'>) => ` ${formatMoney(ctx.parsed.y ?? 0)} ₽`,
+        },
+      },
+    },
+  };
+
+  protected readonly savingsDeltaOptions = {
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: false,
+        ticks: {
+          maxTicksLimit: 6,
+          callback: (v: number | string) => Number(v).toLocaleString('ru-RU', { maximumFractionDigits: 2 }),
+        },
+        grid: {
+          color: (ctx: ScriptableScaleContext) => (ctx.tick.value === 0 ? '#0f766e' : '#e5e7eb'),
+        },
+      },
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx: TooltipItem<'bar'>) => ` ${formatMoney(ctx.parsed.y ?? 0)} ₽`,
+        },
+      },
+    },
+  };
+
   constructor() {
     this.cats.tree(undefined, true).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (list) => {
@@ -318,6 +506,32 @@ export class StatsComponent {
         next: (rows) => this.monthRows.set(rows),
         error: () => this.toasts.error('Не удалось загрузить данные'),
       });
+    this.budget
+      .getMonth(this.monthKey())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (resp) => {
+          this.budgetRows.set(resp.categories);
+          this.budgetTotals.set(resp.totals);
+        },
+        error: () => this.toasts.error('Не удалось загрузить данные'),
+      });
+    this.savings
+      .getYearSummary(this.monthRef().year)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (summary) => this.savingsSummary.set(summary),
+        error: () => this.toasts.error('Не удалось загрузить данные'),
+      });
+  }
+
+  private monthKey(): string {
+    const { year, month } = this.monthRef();
+    return `${year}-${String(month).padStart(2, '0')}`;
+  }
+
+  protected rowLabel(row: BudgetCategoryRow): string {
+    return row.parentName ? `${row.parentName} / ${row.name}` : row.name;
   }
 
   private periods(): { from: string; to: string; from6: string; to6: string } {

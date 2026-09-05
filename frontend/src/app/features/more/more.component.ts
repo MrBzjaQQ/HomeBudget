@@ -12,11 +12,11 @@ import { AuthService } from '../../core/auth.service';
       </div>
 
       <nav class="card divide-y divide-gray-100 p-0">
-        <a routerLink="/export" class="nav-row">
-          <span class="nav-ico">⬇</span>
+        <a routerLink="/savings" class="nav-row">
+          <span class="nav-ico">💰</span>
           <span class="flex-1">
-            <span class="block text-sm font-medium text-gray-900">Экспорт в Excel</span>
-            <span class="block text-xs text-gray-400">месяц или год, вся семья или кто-то один</span>
+            <span class="block text-sm font-medium text-gray-900">Накопления</span>
+            <span class="block text-xs text-gray-400">счета и суммы накоплений по месяцам</span>
           </span>
           <span class="text-gray-300">›</span>
         </a>
@@ -25,6 +25,14 @@ import { AuthService } from '../../core/auth.service';
           <span class="flex-1">
             <span class="block text-sm font-medium text-gray-900">Категории</span>
             <span class="block text-xs text-gray-400">группы, подкатегории, архив</span>
+          </span>
+          <span class="text-gray-300">›</span>
+        </a>
+        <a routerLink="/export" class="nav-row">
+          <span class="nav-ico">⬇</span>
+          <span class="flex-1">
+            <span class="block text-sm font-medium text-gray-900">Экспорт в Excel</span>
+            <span class="block text-xs text-gray-400">месяц или год, вся семья или кто-то один</span>
           </span>
           <span class="text-gray-300">›</span>
         </a>

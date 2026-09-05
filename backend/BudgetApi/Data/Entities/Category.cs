@@ -25,4 +25,6 @@ public class Category
     public ICollection<Category> Children { get; set; } = new List<Category>();
 
     public ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
+
+    public ICollection<BudgetItem> BudgetItems { get; set; } = new List<BudgetItem>();
 }

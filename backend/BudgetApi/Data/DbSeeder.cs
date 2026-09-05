@@ -27,6 +27,15 @@ public static class DbSeeder
             db.Categories.AddRange(expenseGroups);
         }
 
+        if (!await db.SavingsContainers.AnyAsync())
+        {
+            var now = DateTime.UtcNow;
+            db.SavingsContainers.AddRange(
+                new SavingsContainer { Name = "Вклад", Color = "#0f766e", SortOrder = 1, CreatedAt = now },
+                new SavingsContainer { Name = "Наличка", Color = "#f59e0b", SortOrder = 2, CreatedAt = now },
+                new SavingsContainer { Name = "Накопительный счёт", Color = "#3b82f6", SortOrder = 3, CreatedAt = now });
+        }
+
         await db.SaveChangesAsync();
     }
 

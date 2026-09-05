@@ -13,4 +13,6 @@ public class User
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; }
+
+    public ICollection<SavingsEntry> SavingsEntries { get; set; } = new List<SavingsEntry>();
 }

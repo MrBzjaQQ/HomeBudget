@@ -99,6 +99,115 @@ export interface SummaryMonthRow {
   expense: number;
 }
 
+export interface BudgetItemDto {
+  id: number;
+  month: string;
+  categoryId: number;
+  categoryName: string;
+  categoryParentName: string | null;
+  color: string | null;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BudgetCategoryRow {
+  categoryId: number;
+  name: string;
+  parentName: string | null;
+  color: string | null;
+  planned: number;
+  actual: number;
+  diff: number;
+}
+
+export interface BudgetTotalsDto {
+  planned: number;
+  actual: number;
+  diff: number;
+}
+
+export interface BudgetMonthResponse {
+  month: string;
+  items: BudgetItemDto[];
+  categories: BudgetCategoryRow[];
+  totals: BudgetTotalsDto;
+}
+
+export interface BudgetPayload {
+  month: string;
+  categoryId: number;
+  amount: number;
+  note?: string | null;
+}
+
+export interface SavingsContainerDto {
+  id: number;
+  name: string;
+  color: string | null;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface SavingsEntryDto {
+  id: number;
+  month: string;
+  userId: number;
+  userName: string;
+  containerId: number;
+  containerName: string;
+  color: string | null;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavingsMonthResponse {
+  month: string;
+  entries: SavingsEntryDto[];
+  total: number;
+}
+
+export interface SavingsMonthAmount {
+  month: string;
+  amount: number;
+}
+
+export interface SavingsMonthDelta {
+  month: string;
+  delta: number;
+}
+
+export interface SavingsMemberTotal {
+  userId: number;
+  userName: string;
+  amount: number;
+}
+
+export interface SavingsYearSummary {
+  year: number;
+  months: SavingsMonthAmount[];
+  deltas: SavingsMonthDelta[];
+  byMember: SavingsMemberTotal[];
+  total: number;
+}
+
+export interface SavingsContainerPayload {
+  name: string;
+  color?: string | null;
+  sortOrder?: number;
+}
+
+export interface SavingsEntryPayload {
+  month: string;
+  userId?: number;
+  containerId: number;
+  amount: number;
+  note?: string | null;
+}
+
 export interface ApiErrorBody {
   code: string;
   message: string;

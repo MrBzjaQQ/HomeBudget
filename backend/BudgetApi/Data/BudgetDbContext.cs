@@ -11,6 +11,12 @@ public class BudgetDbContext(DbContextOptions<BudgetDbContext> options) : DbCont
 
     public DbSet<Transaction> Transactions => Set<Transaction>();
 
+    public DbSet<BudgetItem> BudgetItems => Set<BudgetItem>();
+
+    public DbSet<SavingsContainer> SavingsContainers => Set<SavingsContainer>();
+
+    public DbSet<SavingsEntry> SavingsEntries => Set<SavingsEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>
@@ -59,24 +65,81 @@ public class BudgetDbContext(DbContextOptions<BudgetDbContext> options) : DbCont
                 .HasForeignKey(x => x.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
+
+        modelBuilder.Entity<BudgetItem>(entity =>
+        {
+            entity.Property(x => x.Amount).HasPrecision(15, 2);
+            entity.ToTable(t => t.HasCheckConstraint("chk_budget_amount_positive", "amount > 0"));
+            entity.Property(x => x.Note).HasMaxLength(500);
+            entity.HasIndex(x => new { x.Month, x.CategoryId }).HasDatabaseName("idx_budget_month_category");
+            entity.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            entity.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+            entity.HasOne(x => x.Category)
+                .WithMany(x => x.BudgetItems)
+                .HasForeignKey(x => x.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SavingsContainer>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Color).HasMaxLength(7);
+            entity.HasIndex(x => x.Name).IsUnique().HasDatabaseName("uq_savings_container_name");
+            entity.Property(x => x.SortOrder).HasDefaultValue(0);
+            entity.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<SavingsEntry>(entity =>
+        {
+            entity.Property(x => x.Amount).HasPrecision(15, 2);
+            entity.ToTable(t => t.HasCheckConstraint("chk_savings_amount_positive", "amount > 0"));
+            entity.Property(x => x.Note).HasMaxLength(500);
+            entity.HasIndex(x => new { x.Month, x.ContainerId, x.UserId }).IsUnique().HasDatabaseName("uq_savings_month_container_user");
+            entity.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            entity.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+            entity.HasOne(x => x.Container)
+                .WithMany(x => x.Entries)
+                .HasForeignKey(x => x.ContainerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.User)
+                .WithMany(x => x.SavingsEntries)
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        TouchUpdatedTransactions();
+        TouchUpdated();
         return base.SaveChangesAsync(cancellationToken);
     }
 
     public override int SaveChanges()
     {
-        TouchUpdatedTransactions();
+        TouchUpdated();
         return base.SaveChanges();
     }
 
-    private void TouchUpdatedTransactions()
+    private void TouchUpdated()
     {
         var now = DateTime.UtcNow;
         foreach (var entry in ChangeTracker.Entries<Transaction>())
+        {
+            if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = now;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<BudgetItem>())
+        {
+            if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = now;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<SavingsEntry>())
         {
             if (entry.State == EntityState.Modified)
             {
