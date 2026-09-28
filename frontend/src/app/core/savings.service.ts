@@ -7,7 +7,7 @@ import {
   SavingsEntryDto,
   SavingsEntryPayload,
   SavingsMonthResponse,
-  SavingsYearSummary,
+  SavingsSummary,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -48,9 +48,9 @@ export class SavingsService {
     return this.http.delete<void>(`/api/savings/${id}`);
   }
 
-  getYearSummary(year: number): Observable<SavingsYearSummary> {
-    return this.http.get<SavingsYearSummary>('/api/savings/summary', {
-      params: new HttpParams().set('year', String(year)),
+  getSummary(to: string): Observable<SavingsSummary> {
+    return this.http.get<SavingsSummary>('/api/savings/summary', {
+      params: new HttpParams().set('to', to),
     });
   }
 }

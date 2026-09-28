@@ -10,7 +10,7 @@ import {
   BudgetCategoryRow,
   BudgetTotalsDto,
   CategoryDto,
-  SavingsYearSummary,
+  SavingsSummary,
 } from '../../core/models';
 import { MonthTitlePipe, MoneyPipe, formatMoney } from '../../core/format.pipe';
 import { SavingsService } from '../../core/savings.service';
@@ -129,12 +129,10 @@ const FALLBACK_COLORS = [
       </div>
 
       <div class="card">
-        <h2 class="section-title">Накопления за {{ monthRef().year }}</h2>
+        <h2 class="section-title">Накопления за 12 месяцев</h2>
         @let savings = savingsSummary();
         @if (!savings) {
           <div class="py-8 text-center text-sm text-gray-400">Загрузка…</div>
-        } @else if (savings.total === 0 && savings.byMember.length === 0) {
-          <div class="py-8 text-center text-sm text-gray-400">Накоплений за год нет</div>
         } @else {
           <div class="h-48">
             <canvas
@@ -142,7 +140,7 @@ const FALLBACK_COLORS = [
               [type]="'line'"
               [data]="savingsLineData()"
               [options]="savingsLineOptions"
-              aria-label="График накоплений по месяцам года"
+              aria-label="График накоплений по месяцам"
             ></canvas>
           </div>
           <div class="mt-4 h-48">
@@ -154,23 +152,11 @@ const FALLBACK_COLORS = [
               aria-label="Столбчатая диаграмма изменения к прошлому месяцу"
             ></canvas>
           </div>
-          <div class="mt-3 space-y-1.5">
-            @for (m of savings.byMember; track m.userId) {
-              <div class="flex items-center gap-2 text-sm">
-                <span class="min-w-0 flex-1 truncate text-gray-700">{{ m.userName }}</span>
-                <span class="font-medium text-gray-900">{{ m.amount | money }} ₽</span>
-              </div>
-            }
-            <div class="flex items-center gap-2 border-t border-gray-100 pt-2 text-sm">
-              <span class="flex-1 font-semibold text-gray-900">Суммарно</span>
-              <span class="font-bold text-brand">{{ savings.total | money }} ₽</span>
-            </div>
-          </div>
         }
       </div>
 
       <div class="card">
-        <h2 class="section-title">Динамика за 6 месяцев</h2>
+        <h2 class="section-title">Динамика за 12 месяцев</h2>
         <div class="h-56">
           <canvas
             baseChart
@@ -254,7 +240,18 @@ export class StatsComponent {
   protected readonly budgetRows = signal<BudgetCategoryRow[]>([]);
   protected readonly budgetTotals = signal<BudgetTotalsDto | null>(null);
 
-  protected readonly savingsSummary = signal<SavingsYearSummary | null>(null);
+  protected readonly savingsSummary = signal<SavingsSummary | null>(null);
+
+  private readonly windowEnd = computed(() => {
+    const selected = this.monthRef();
+    const server = parseServerMonth(this.auth.serverDate());
+    if (!server) {
+      return selected;
+    }
+    const selectedIdx = selected.year * 12 + selected.month - 1;
+    const serverIdx = server.year * 12 + server.month - 1;
+    return selectedIdx <= serverIdx ? selected : server;
+  });
 
   protected readonly doughnutOptions = {
     cutout: '62%',
@@ -343,7 +340,7 @@ export class StatsComponent {
   });
 
   protected readonly barData = computed(() => {
-    const months = this.lastSixMonths();
+    const months = this.lastTwelveMonths();
     const byMonth = new Map(this.monthRows().map((r) => [r.month, r]));
     const income = months.map((m) => byMonth.get(m)?.income ?? 0);
     const expense = months.map((m) => byMonth.get(m)?.expense ?? 0);
@@ -491,7 +488,7 @@ export class StatsComponent {
   }
 
   private reload(): void {
-    const { from, to, from6, to6 } = this.periods();
+    const { from, to, from12, to12 } = this.periods();
     this.txns
       .summaryCategory(from, to)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -500,7 +497,7 @@ export class StatsComponent {
         error: () => this.toasts.error('Не удалось загрузить данные'),
       });
     this.txns
-      .summaryMonth(from6, to6)
+      .summaryMonth(from12, to12)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (rows) => this.monthRows.set(rows),
@@ -517,7 +514,7 @@ export class StatsComponent {
         error: () => this.toasts.error('Не удалось загрузить данные'),
       });
     this.savings
-      .getYearSummary(this.monthRef().year)
+      .getSummary(this.monthKey())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (summary) => this.savingsSummary.set(summary),
@@ -534,20 +531,20 @@ export class StatsComponent {
     return row.parentName ? `${row.parentName} / ${row.name}` : row.name;
   }
 
-  private periods(): { from: string; to: string; from6: string; to6: string } {
+  private periods(): { from: string; to: string; from12: string; to12: string } {
     const { year, month } = this.monthRef();
     const from = `${year}-${String(month).padStart(2, '0')}-01`;
     const to = fmtDate(new Date(year, month, 0));
-    const first = new Date(year, month - 6, 1);
-    const from6 = fmtDate(first);
-    const to6 = to;
-    return { from, to, from6, to6 };
+    const end = this.windowEnd();
+    const from12 = fmtDate(new Date(end.year, end.month - 12, 1));
+    const to12 = fmtDate(new Date(end.year, end.month, 0));
+    return { from, to, from12, to12 };
   }
 
-  private lastSixMonths(): string[] {
-    const { year, month } = this.monthRef();
+  private lastTwelveMonths(): string[] {
+    const { year, month } = this.windowEnd();
     const months: string[] = [];
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 11; i >= 0; i--) {
       const d = new Date(year, month - 1 - i, 1);
       months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }

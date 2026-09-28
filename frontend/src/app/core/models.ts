@@ -186,8 +186,8 @@ export interface SavingsMemberTotal {
   amount: number;
 }
 
-export interface SavingsYearSummary {
-  year: number;
+export interface SavingsSummary {
+  to: string;
   months: SavingsMonthAmount[];
   deltas: SavingsMonthDelta[];
   byMember: SavingsMemberTotal[];

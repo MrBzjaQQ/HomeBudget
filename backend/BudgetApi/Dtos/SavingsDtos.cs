@@ -63,8 +63,8 @@ public record SavingsMonthDelta(string Month, decimal Delta);
 
 public record SavingsMemberTotal(int UserId, string UserName, decimal Amount);
 
-public record SavingsYearSummary(
-    int Year,
+public record SavingsSummary(
+    string To,
     IReadOnlyList<SavingsMonthAmount> Months,
     IReadOnlyList<SavingsMonthDelta> Deltas,
     IReadOnlyList<SavingsMemberTotal> ByMember,

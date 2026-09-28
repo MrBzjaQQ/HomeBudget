@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BudgetApi.Common;
 using BudgetApi.Data;
 using BudgetApi.Data.Entities;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,8 +9,6 @@ namespace BudgetApi.Tests;
 
 public class SavingsTests : ApiTestBase
 {
-    private const int SummaryYear = 2026;
-
     private async Task<int> CreateMemberAsync(string username, string displayName)
     {
         var created = await SendAsync(HttpMethod.Post, "/api/users", new { username, displayName, password = "secret123" });
@@ -533,29 +532,31 @@ public class SavingsTests : ApiTestBase
     }
 
     [Fact]
-    public async Task Summary_ReturnsTwelveMonths_ByMemberAndTotal()
+    public async Task Summary_ReturnsTwelveMonthWindow_ByMemberAndTotal()
     {
         var ivanId = await CreateMemberAsync("ivan32", "Иван");
         var katyaId = await CreateMemberAsync("katya32", "Катя");
         var depositId = await GetContainerIdAsync("Вклад");
         var cashId = await GetContainerIdAsync("Наличка");
 
-        await SendAsync(HttpMethod.Post, "/api/savings", new { month = "2026-01", userId = ivanId, containerId = depositId, amount = 10000 });
-        await SendAsync(HttpMethod.Post, "/api/savings", new { month = "2026-03", userId = ivanId, containerId = depositId, amount = 20000 });
-        await SendAsync(HttpMethod.Post, "/api/savings", new { month = "2026-01", userId = katyaId, containerId = cashId, amount = 5000 });
-        await SendAsync(HttpMethod.Post, "/api/savings", new { month = "2025-12", userId = ivanId, containerId = depositId, amount = 424242 });
+        var to = Validation.Today().AddMonths(-1);
+        var first = to.AddMonths(-11);
+        var beforeWindow = first.AddMonths(-1);
 
-        var result = await SendAsync(HttpMethod.Get, $"/api/savings/summary?year={SummaryYear}");
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{first:yyyy-MM}", userId = ivanId, containerId = depositId, amount = 10000 });
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{to.AddMonths(-2):yyyy-MM}", userId = ivanId, containerId = depositId, amount = 20000 });
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{to:yyyy-MM}", userId = katyaId, containerId = cashId, amount = 5000 });
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{beforeWindow:yyyy-MM}", userId = ivanId, containerId = depositId, amount = 424242 });
+
+        var result = await SendAsync(HttpMethod.Get, $"/api/savings/summary?to={to:yyyy-MM}");
 
         Assert.Equal(200, result.Status);
-        Assert.Equal(SummaryYear, result.Json.GetProperty("year").GetInt32());
+        Assert.Equal($"{to:yyyy-MM}", result.Json.GetProperty("to").GetString());
 
         var months = result.Json.GetProperty("months").EnumerateArray().ToList();
         Assert.Equal(12, months.Count);
-        AssertMonthAmount(months[0], "2026-01", 15000m);
-        AssertMonthAmount(months[1], "2026-02", 0m);
-        AssertMonthAmount(months[2], "2026-03", 20000m);
-        AssertMonthAmount(months[11], "2026-12", 0m);
+        AssertMonthAmount(months[0], $"{first:yyyy-MM}", 10000m);
+        AssertMonthAmount(months[11], $"{to:yyyy-MM}", 5000m);
 
         var byMember = result.Json.GetProperty("byMember").EnumerateArray().ToList();
         Assert.Equal(2, byMember.Count);
@@ -567,24 +568,52 @@ public class SavingsTests : ApiTestBase
     }
 
     [Fact]
-    public async Task Summary_Deltas_FromPreviousMonth_JanuaryUsesPreviousDecember_NegativeWhenDecrease()
+    public async Task Summary_Deltas_FirstMonthUsesMonthBeforeWindow_NegativeWhenDecrease()
     {
         var ivanId = await CreateMemberAsync("ivan33", "Иван");
         var containerId = await GetContainerIdAsync("Вклад");
 
-        await SendAsync(HttpMethod.Post, "/api/savings", new { month = "2025-12", userId = ivanId, containerId, amount = 30000 });
-        await SendAsync(HttpMethod.Post, "/api/savings", new { month = "2026-01", userId = ivanId, containerId, amount = 30000 });
-        await SendAsync(HttpMethod.Post, "/api/savings", new { month = "2026-02", userId = ivanId, containerId, amount = 15000 });
-        await SendAsync(HttpMethod.Post, "/api/savings", new { month = "2026-04", userId = ivanId, containerId, amount = 25000 });
+        var to = Validation.Today().AddMonths(-1);
+        var first = to.AddMonths(-11);
+        var beforeWindow = first.AddMonths(-1);
 
-        var result = await SendAsync(HttpMethod.Get, $"/api/savings/summary?year={SummaryYear}");
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{beforeWindow:yyyy-MM}", userId = ivanId, containerId, amount = 30000 });
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{first:yyyy-MM}", userId = ivanId, containerId, amount = 30000 });
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{first.AddMonths(1):yyyy-MM}", userId = ivanId, containerId, amount = 15000 });
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{first.AddMonths(3):yyyy-MM}", userId = ivanId, containerId, amount = 25000 });
+
+        var result = await SendAsync(HttpMethod.Get, $"/api/savings/summary?to={to:yyyy-MM}");
         var deltas = result.Json.GetProperty("deltas").EnumerateArray().ToList();
 
         Assert.Equal(12, deltas.Count);
-        AssertMonthDelta(deltas[0], "2026-01", 0m);
-        AssertMonthDelta(deltas[1], "2026-02", -15000m);
-        AssertMonthDelta(deltas[2], "2026-03", -15000m);
-        AssertMonthDelta(deltas[3], "2026-04", 25000m);
+        AssertMonthDelta(deltas[0], $"{first:yyyy-MM}", 0m);
+        AssertMonthDelta(deltas[1], $"{first.AddMonths(1):yyyy-MM}", -15000m);
+        AssertMonthDelta(deltas[2], $"{first.AddMonths(2):yyyy-MM}", -15000m);
+        AssertMonthDelta(deltas[3], $"{first.AddMonths(3):yyyy-MM}", 25000m);
+    }
+
+    [Fact]
+    public async Task Summary_FutureTo_IsClampedToCurrentMonth_AndFutureEntriesExcluded()
+    {
+        var ivanId = await CreateMemberAsync("ivan35", "Иван");
+        var depositId = await GetContainerIdAsync("Вклад");
+        var cashId = await GetContainerIdAsync("Наличка");
+
+        var today = Validation.Today();
+        var currentMonth = new DateOnly(today.Year, today.Month, 1);
+        var futureMonth = currentMonth.AddMonths(1);
+
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{currentMonth:yyyy-MM}", userId = ivanId, containerId = depositId, amount = 1000 });
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{futureMonth:yyyy-MM}", userId = ivanId, containerId = cashId, amount = 9999 });
+
+        var result = await SendAsync(HttpMethod.Get, $"/api/savings/summary?to={futureMonth:yyyy-MM}");
+
+        Assert.Equal(200, result.Status);
+        Assert.Equal($"{currentMonth:yyyy-MM}", result.Json.GetProperty("to").GetString());
+        var months = result.Json.GetProperty("months").EnumerateArray().ToList();
+        Assert.Equal(12, months.Count);
+        AssertMonthAmount(months[11], $"{currentMonth:yyyy-MM}", 1000m);
+        Assert.Equal(1000m, result.Json.GetProperty("total").GetDecimal());
     }
 
     [Fact]
@@ -594,13 +623,15 @@ public class SavingsTests : ApiTestBase
         var containerId = await GetContainerIdAsync("Вклад");
         var adminId = await GetAdminUserIdAsync();
 
-        await SendAsync(HttpMethod.Post, "/api/savings", new { month = "2026-05", userId = ivanId, containerId, amount = 10000 });
+        var to = Validation.Today().AddMonths(-1);
+
+        await SendAsync(HttpMethod.Post, "/api/savings", new { month = $"{to:yyyy-MM}", userId = ivanId, containerId, amount = 10000 });
 
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BudgetDbContext>();
         db.SavingsEntries.Add(new SavingsEntry
         {
-            Month = new DateOnly(SummaryYear, 5, 1),
+            Month = to,
             UserId = adminId,
             ContainerId = containerId,
             Amount = 99999,
@@ -609,11 +640,11 @@ public class SavingsTests : ApiTestBase
         });
         await db.SaveChangesAsync();
 
-        var result = await SendAsync(HttpMethod.Get, $"/api/savings/summary?year={SummaryYear}");
+        var result = await SendAsync(HttpMethod.Get, $"/api/savings/summary?to={to:yyyy-MM}");
 
         Assert.Equal(200, result.Status);
         var months = result.Json.GetProperty("months").EnumerateArray().ToList();
-        AssertMonthAmount(months[4], "2026-05", 10000m);
+        AssertMonthAmount(months[11], $"{to:yyyy-MM}", 10000m);
         var byMember = result.Json.GetProperty("byMember").EnumerateArray().ToList();
         Assert.Single(byMember);
         Assert.Equal("Иван", byMember[0].GetProperty("userName").GetString());
@@ -621,14 +652,25 @@ public class SavingsTests : ApiTestBase
     }
 
     [Fact]
-    public async Task Summary_InvalidYear_Returns400()
+    public async Task Summary_InvalidTo_Returns400()
     {
-        foreach (var year in new[] { 1999, 2200, 0 })
+        foreach (var to in new[] { "2026-13", "20261", "abc", "2026-00" })
         {
-            var result = await SendAsync(HttpMethod.Get, $"/api/savings/summary?year={year}");
+            var result = await SendAsync(HttpMethod.Get, $"/api/savings/summary?to={to}");
             Assert.Equal(400, result.Status);
             Assert.Equal("ValidationFailed", result.GetProperty<string>("code"));
         }
+    }
+
+    [Fact]
+    public async Task Summary_WithoutTo_DefaultsToCurrentMonth()
+    {
+        var result = await SendAsync(HttpMethod.Get, "/api/savings/summary");
+
+        Assert.Equal(200, result.Status);
+        var today = Validation.Today();
+        Assert.Equal($"{today.Year}-{today.Month:00}", result.Json.GetProperty("to").GetString());
+        Assert.Equal(12, result.Json.GetProperty("months").EnumerateArray().Count());
     }
 
     [Fact]

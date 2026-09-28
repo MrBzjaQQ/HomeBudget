@@ -275,19 +275,23 @@ public class SavingsController(BudgetDbContext db) : ControllerBase
     }
 
     [HttpGet("summary")]
-    public async Task<ActionResult<SavingsYearSummary>> Summary([FromQuery] int year, CancellationToken ct)
+    public async Task<ActionResult<SavingsSummary>> Summary([FromQuery] string? to, CancellationToken ct)
     {
-        if (year is < 2000 or > 2100)
+        var today = Validation.Today();
+        var currentMonth = new DateOnly(today.Year, today.Month, 1);
+        var requestedEnd = currentMonth;
+        if (!string.IsNullOrWhiteSpace(to))
         {
-            throw ApiErrorException.BadRequest("Некорректный год");
+            requestedEnd = ParseMonth(to)
+                ?? throw ApiErrorException.BadRequest(MonthError, new Dictionary<string, string> { ["to"] = MonthError });
         }
 
-        var yearStart = new DateOnly(year, 1, 1);
-        var yearEnd = new DateOnly(year, 12, 1);
-        var prevDec = new DateOnly(year - 1, 12, 1);
+        var windowEnd = requestedEnd < currentMonth ? requestedEnd : currentMonth;
+        var windowStart = windowEnd.AddMonths(-11);
+        var beforeWindow = windowStart.AddMonths(-1);
 
         var entries = await db.SavingsEntries.AsNoTracking()
-            .Where(x => x.Month >= yearStart && x.Month < yearEnd && x.User.Username != AdminUsername)
+            .Where(x => x.Month >= windowStart && x.Month <= windowEnd && x.User.Username != AdminUsername)
             .Select(x => new { x.Month, x.UserId, UserName = x.User.DisplayName, x.Amount })
             .ToListAsync(ct);
 
@@ -295,19 +299,18 @@ public class SavingsController(BudgetDbContext db) : ControllerBase
             .GroupBy(x => x.Month)
             .ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
 
-        var prevDecAmount = await db.SavingsEntries.AsNoTracking()
-            .Where(x => x.Month == prevDec && x.User.Username != AdminUsername)
+        var beforeWindowTotal = await db.SavingsEntries.AsNoTracking()
+            .Where(x => x.Month == beforeWindow && x.User.Username != AdminUsername)
             .Select(x => x.Amount)
-            .ToListAsync(ct);
-        var prevDecTotal = prevDecAmount.Sum();
+            .SumAsync(ct);
 
         var months = new List<SavingsMonthAmount>(12);
         var deltas = new List<SavingsMonthDelta>(12);
-        for (var m = 1; m <= 12; m++)
+        for (var m = 0; m < 12; m++)
         {
-            var monthKey = new DateOnly(year, m, 1);
+            var monthKey = windowStart.AddMonths(m);
             var amount = amountsByMonth.GetValueOrDefault(monthKey, 0m);
-            var previousAmount = m == 1 ? prevDecTotal : amountsByMonth.GetValueOrDefault(monthKey.AddMonths(-1), 0m);
+            var previousAmount = m == 0 ? beforeWindowTotal : amountsByMonth.GetValueOrDefault(monthKey.AddMonths(-1), 0m);
             months.Add(new SavingsMonthAmount(monthKey.ToString("yyyy-MM"), amount));
             deltas.Add(new SavingsMonthDelta(monthKey.ToString("yyyy-MM"), amount - previousAmount));
         }
@@ -319,7 +322,7 @@ public class SavingsController(BudgetDbContext db) : ControllerBase
             .ThenBy(x => x.UserName)
             .ToList();
 
-        return Ok(new SavingsYearSummary(year, months, deltas, byMember, byMember.Sum(x => x.Amount)));
+        return Ok(new SavingsSummary(windowEnd.ToString("yyyy-MM"), months, deltas, byMember, byMember.Sum(x => x.Amount)));
     }
 
     private sealed record ValidatedSavingsEntry(DateOnly Month, int UserId, int ContainerId, decimal Amount, string? Note);

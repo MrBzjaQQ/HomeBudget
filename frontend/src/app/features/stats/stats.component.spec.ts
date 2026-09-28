@@ -4,7 +4,7 @@ import { Observable, of } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { BudgetService } from '../../core/budget.service';
 import { CategoriesService } from '../../core/categories.service';
-import { BudgetMonthResponse, SavingsYearSummary } from '../../core/models';
+import { BudgetMonthResponse, SavingsSummary } from '../../core/models';
 import { SavingsService } from '../../core/savings.service';
 import { ToastService } from '../../core/toast.service';
 import { TransactionsService } from '../../core/transactions.service';
@@ -25,21 +25,25 @@ interface MemberTotal {
   amount: number;
 }
 
-function makeSummary(year: number, amounts: number[], byMember: MemberTotal[]): SavingsYearSummary {
-  const months = amounts.map((amount, i) => ({
-    month: `${year}-${String(i + 1).padStart(2, '0')}`,
-    amount,
-  }));
+function makeSummary(to: string, amounts: number[], byMember: MemberTotal[]): SavingsSummary {
+  const [ty, tm] = to.split('-').map(Number);
+  const months = amounts.map((amount, i) => {
+    const d = new Date(ty, tm - 1 - (amounts.length - 1 - i), 1);
+    return {
+      month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      amount,
+    };
+  });
   const deltas = amounts.map((amount, i) => ({
     month: months[i].month,
     delta: i === 0 ? amount : amount - amounts[i - 1],
   }));
   const total = byMember.reduce((s, m) => s + m.amount, 0);
-  return { year, months, deltas, byMember, total };
+  return { to, months, deltas, byMember, total };
 }
 
-const summary: SavingsYearSummary = makeSummary(
-  2026,
+const summary: SavingsSummary = makeSummary(
+  '2026-08',
   [30000, 45000, 40000, 60000, 50000, 80000, 90000, 70000, 100000, 110000, 95000, 120000],
   [
     { userId: 2, userName: 'Ваня', amount: 100000 },
@@ -47,25 +51,33 @@ const summary: SavingsYearSummary = makeSummary(
   ],
 );
 
-const emptySummary: SavingsYearSummary = makeSummary(2026, Array(12).fill(0), []);
+const emptySummary: SavingsSummary = makeSummary('2026-08', Array(12).fill(0), []);
 
 interface ChartDatasetLike {
   data: number[];
   backgroundColor?: string | string[];
 }
 
+interface ChartDataLike {
+  labels: string[];
+  datasets: ChartDatasetLike[];
+}
+
 interface StatsComponentApi {
-  savingsSummary: () => SavingsYearSummary | null;
-  savingsLineData: () => { labels: string[]; datasets: ChartDatasetLike[] };
-  savingsDeltaData: () => { labels: string[]; datasets: ChartDatasetLike[] };
+  savingsSummary: () => SavingsSummary | null;
+  savingsLineData: () => ChartDataLike;
+  savingsDeltaData: () => ChartDataLike;
+  barData: () => ChartDataLike;
   shiftMonth(delta: number): void;
 }
 
 describe('StatsComponent', () => {
-  let getYearSummarySpy: { calls: number[]; fn: (year: number) => Observable<SavingsYearSummary> };
+  let getSummarySpy: { calls: string[]; fn: (to: string) => Observable<SavingsSummary> };
+  let summaryMonthSpy: { calls: Array<[string, string]> };
 
   beforeEach(async () => {
-    getYearSummarySpy = { calls: [], fn: () => of(summary) };
+    getSummarySpy = { calls: [], fn: () => of(summary) };
+    summaryMonthSpy = { calls: [] };
     HTMLCanvasElement.prototype.getContext = (() => null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
     await TestBed.configureTestingModule({
       imports: [StatsComponent],
@@ -76,7 +88,13 @@ describe('StatsComponent', () => {
         },
         {
           provide: TransactionsService,
-          useValue: { summaryCategory: () => of([]), summaryMonth: () => of([]) },
+          useValue: {
+            summaryCategory: () => of([]),
+            summaryMonth: (from: string, to: string) => {
+              summaryMonthSpy.calls.push([from, to]);
+              return of([]);
+            },
+          },
         },
         {
           provide: CategoriesService,
@@ -89,9 +107,9 @@ describe('StatsComponent', () => {
         {
           provide: SavingsService,
           useValue: {
-            getYearSummary: (year: number) => {
-              getYearSummarySpy.calls.push(year);
-              return getYearSummarySpy.fn(year);
+            getSummary: (to: string) => {
+              getSummarySpy.calls.push(to);
+              return getSummarySpy.fn(to);
             },
           },
         },
@@ -109,14 +127,14 @@ describe('StatsComponent', () => {
     };
   }
 
-  it('requests the year summary for the year of the selected month', () => {
+  it('requests the savings summary for the selected month', () => {
     const { component: c } = comp();
 
-    expect(getYearSummarySpy.calls[0]).toBe(2026);
+    expect(getSummarySpy.calls[0]).toBe('2026-08');
     expect(c.savingsSummary()).toBe(summary);
   });
 
-  it('renders the line chart with 12 monthly amounts', () => {
+  it('renders the line chart with 12 monthly amounts of the window', () => {
     const { component: c } = comp();
     const line = c.savingsLineData();
 
@@ -141,32 +159,40 @@ describe('StatsComponent', () => {
     });
   });
 
-  it('renders the per-member totals and the grand total', () => {
+  it('renders the savings charts', () => {
     const { fixture } = comp();
     const el = fixture.nativeElement as HTMLElement;
 
-    expect(el.textContent).toContain('Накопления за 2026');
-    expect(el.textContent).toContain('Ваня');
-    expect(el.textContent).toContain('Катя');
-    expect(el.textContent).toContain('100\u00A0000,00 ₽');
-    expect(el.textContent).toContain('50\u00A0000,00 ₽');
-    expect(el.textContent).toContain('Суммарно');
-    expect(el.textContent).toContain('150\u00A0000,00 ₽');
+    expect(el.textContent).toContain('Накопления за 12 месяцев');
     expect(el.querySelectorAll('canvas').length).toBe(3);
   });
 
-  it('shows the empty state when the year has no savings', () => {
-    getYearSummarySpy.fn = () => of(emptySummary);
-    const { fixture } = comp();
 
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Накоплений за год нет');
-  });
-
-  it('requests the summary for the new year after the month is shifted', () => {
+  it('requests the summary for the new month after the month is shifted', () => {
     const { component: c } = comp();
 
     c.shiftMonth(-8);
 
-    expect(getYearSummarySpy.calls[getYearSummarySpy.calls.length - 1]).toBe(2025);
+    expect(getSummarySpy.calls[getSummarySpy.calls.length - 1]).toBe('2025-12');
+  });
+
+  it('requests the dynamics window of 12 months ending at the selected month', () => {
+    const { component: c } = comp();
+    const bars = c.barData();
+
+    expect(summaryMonthSpy.calls[0]).toEqual(['2025-09-01', '2026-08-31']);
+    expect(bars.labels.length).toBe(12);
+    expect(bars.labels[0]).toBe('сент');
+    expect(bars.labels[11]).toBe('авг');
+  });
+
+  it('does not move the windows into the future when a future month is selected', () => {
+    const { component: c } = comp();
+
+    c.shiftMonth(3);
+
+    expect(summaryMonthSpy.calls[summaryMonthSpy.calls.length - 1]).toEqual(['2025-09-01', '2026-08-31']);
+    expect(c.barData().labels.length).toBe(12);
+    expect(c.barData().labels[11]).toBe('авг');
   });
 });
