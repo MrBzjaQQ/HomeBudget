@@ -1,11 +1,11 @@
 using System.Globalization;
 using System.Text;
+using Budget.Application;
 using BudgetApi.Auth;
 using BudgetApi.Common;
-using BudgetApi.Data;
-using BudgetApi.Export;
+using Budget.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
@@ -21,10 +21,6 @@ builder.Host.UseSerilog((ctx, lc) => lc
     .WriteTo.Console()
     .WriteTo.File("logs/app-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14, shared: true));
 
-var dbProvider = builder.Configuration["Database:Provider"] ?? "Npgsql";
-var connectionString = builder.Configuration.GetConnectionString("Default")
-    ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured");
-
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     var json = options.JsonSerializerOptions;
@@ -35,7 +31,7 @@ builder.Services.AddControllers().AddJsonOptions(options =>
         json.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(new UpperCaseNamingPolicy()));
     }
 });
-builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
+builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
     {
@@ -46,7 +42,7 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options 
             Message = message,
             Errors = errors,
         };
-        return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(payload);
+        return new BadRequestObjectResult(payload);
     };
 });
 builder.Services.AddEndpointsApiExplorer();
@@ -61,18 +57,8 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.AddSingleton<JwtTokenService>();
-builder.Services.AddSingleton<ExcelExportService>();
-builder.Services.AddDbContext<BudgetDbContext>(options =>
-{
-    if (dbProvider == "InMemory")
-    {
-        options.UseInMemoryDatabase(builder.Configuration["Database:InMemoryName"] ?? "budget-test");
-    }
-    else
-    {
-        options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention(CultureInfo.InvariantCulture);
-    }
-});
+builder.Services.AddApplicationServices();
+builder.Services.AddDatabase(builder.Configuration);
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()!;
 
@@ -115,10 +101,8 @@ var app = builder.Build();
 
 if (!app.Environment.IsEnvironment("Testing"))
 {
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<BudgetDbContext>();
-    await db.Database.MigrateAsync();
-    await DbSeeder.SeedAsync(db);
+    await app.MigrateDatabaseAsync();
+    await app.SeedDatabaseAsync();
 }
 
 app.UseSerilogRequestLogging();

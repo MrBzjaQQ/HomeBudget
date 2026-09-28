@@ -1,0 +1,27 @@
+using Budget.Application.Auth;
+using Budget.Application.Budget;
+using Budget.Application.Categories;
+using Budget.Application.Export;
+using Budget.Application.Savings;
+using Budget.Application.Transactions;
+using Budget.Application.Users;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Budget.Application;
+
+/// <summary>Регистрация сервисов бизнес-логики слоя Application.</summary>
+public static class DependencyInjection
+{
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    {
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<ITransactionService, TransactionService>();
+        services.AddScoped<IBudgetService, BudgetService>();
+        services.AddScoped<ISavingsService, SavingsService>();
+        services.AddScoped<IExportService, ExportService>();
+
+        return services;
+    }
+}

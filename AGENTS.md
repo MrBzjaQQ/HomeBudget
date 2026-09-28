@@ -1,6 +1,8 @@
 # AGENTS.md
 
-Приложение «Домашний бюджет»: Angular 22 (signals, zoneless, Tailwind 4, Chart.js) + ASP.NET Core 10 Web API + PostgreSQL 16. Требования: .NET SDK 10, Node 22+, Docker (для БД). Спецификация продукта — `ТЗ_ Домашний бюджет …md` в корне (русский).
+Приложение «Домашний бюджет»: Angular 22 (signals, zoneless, Tailwind 4, Chart.js) + ASP.NET Core 10 Web API (Clean Architecture) + PostgreSQL 16. Требования: .NET SDK 10, Node 22+, Docker (для БД). Спецификация продукта — `ТЗ_ Домашний бюджет …md` в `docs/` (русский).
+
+**Навигация по проекту — файлы BRIEF.md**: корень `BRIEF.md` (общая архитектура и дерево), `backend/BRIEF.md` (+ по BRIEF.md в каждом проекте backend и в `frontend`, `frontend/src`, `frontend/src/app`, `docs`). Начинайте знакомство с `BRIEF.md` в корне.
 
 ## Команды
 
@@ -31,18 +33,21 @@ cd frontend && npx ng test                                      # vitest + jsdom
 cd frontend && npx ng test --include='**/app.spec.ts'           # один файл
 ```
 
-Миграции EF (схема применяется автоматически при старте API, см. ниже):
+Миграции EF (схема применяется автоматически при старте API, см. ниже). Контекст и миграции живут в `Budget.Infrastructure`, запускайте CLI из `BudgetApi` (startup-проект):
 
 ```bash
-cd backend/BudgetApi && dotnet ef migrations add <Name>
+cd backend/BudgetApi && dotnet ef migrations add <Name> --project ..\Budget.Infrastructure
+cd backend/BudgetApi && dotnet ef migrations has-pending-model-changes --project ..\Budget.Infrastructure
 ```
 
 ## Как это устроено
 
-- **Нет `.sln`** — в `backend/` два независимых проекта (`BudgetApi`, `BudgetApi.Tests`); dotnet-команды запускаются из каталога проекта.
+- **Нет `.sln`** — в `backend/` пять независимых проектов Clean Architecture: `Budget.Domain` (сущности) → `Budget.Application` (сервисы, DTO, контракты) → `Budget.Infrastructure` (EF Core, миграции, репозитории, BCrypt, Excel) → `BudgetApi` (контроллеры, JWT, Program.cs); `BudgetApi.Tests` (xUnit). dotnet-команды запускаются из каталога проекта.
+- **Контроллеры не касаются DbContext** — только интерфейсы сервисов `I*Service` из `Budget.Application`; данные — через `IUnitOfWork` (реализация в `Budget.Infrastructure`).
 - **Один контейнер = API + SPA**: `Program.cs` через `MapFallback` раздаёт `wwwroot` (содержимое `frontend/dist/budget-web/browser` после `npm run build`); без сборки фронтенда SPA отвечает 404.
-- **Старт API**: `MigrateAsync()` + `DbSeeder` (создаёт `admin/admin123` и категории) — пропускается только в среде `Testing`.
-- **Провайдер БД переключается конфигурацией** `Database:Provider` (`Npgsql` по умолчанию / `InMemory` в тестах). Npgsql работает со snake_case-именованием (`UseSnakeCaseNamingConvention`).
+- **Старт API**: `MigrateDatabaseAsync()` + `SeedDatabaseAsync()` (создаёт `admin/admin123`, категории, счета) — пропускается только в среде `Testing`.
+- **Провайдер БД переключается конфигурацией** `Database:Provider` (`Npgsql` по умолчанию / `InMemory` в тестах) — переключение в `Budget.Infrastructure/DependencyInjection.cs`. Npgsql работает со snake_case-именованием (`UseSnakeCaseNamingConvention`).
+- **Идентификаторы миграций менять нельзя** (в живой БД они в `__EFMigrationsHistory`); новые миграции создаются в `Budget.Infrastructure`.
 - **Swagger** доступен только в `Development` (`localhost:5080/swagger`).
 - **JSON-контракт**: перечисления сериализуются строками ВЕРХНИМ регистром (`kind: "EXPENSE"`); ошибки валидации — `{code, message, errors}` (кастомная `InvalidModelStateResponseFactory`).
 - JWT — 24 ч, пароли BCrypt; деактивированный пользователь не входит, но его история операций видна.

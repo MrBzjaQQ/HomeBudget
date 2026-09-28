@@ -1,7 +1,7 @@
 using System.Text.Json;
-using BudgetApi.Common;
-using BudgetApi.Data;
-using BudgetApi.Data.Entities;
+using Budget.Application.Common;
+using Budget.Domain.Entities;
+using Budget.Infrastructure.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

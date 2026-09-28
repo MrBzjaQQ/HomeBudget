@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using System.Text;
-using BudgetApi.Data.Entities;
+using Budget.Domain.Entities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;

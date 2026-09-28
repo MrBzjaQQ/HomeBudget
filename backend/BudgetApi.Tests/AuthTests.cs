@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Xunit;
 
@@ -47,7 +47,7 @@ public class AuthTests : ApiTestBase
         Assert.Equal(200, result.Status);
         var serverDate = result.GetProperty<string>("serverDate")!;
         Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", serverDate);
-        Assert.Equal(BudgetApi.Common.Validation.Today().ToString("yyyy-MM-dd"), serverDate);
+        Assert.Equal(Budget.Application.Common.Validation.Today().ToString("yyyy-MM-dd"), serverDate);
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class AuthTests : ApiTestBase
         Assert.Equal("admin", result.Json.GetProperty("user").GetProperty("username").GetString());
         var serverDate = result.GetProperty<string>("serverDate")!;
         Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", serverDate);
-        Assert.Equal(BudgetApi.Common.Validation.Today().ToString("yyyy-MM-dd"), serverDate);
+        Assert.Equal(Budget.Application.Common.Validation.Today().ToString("yyyy-MM-dd"), serverDate);
     }
 
     [Fact]

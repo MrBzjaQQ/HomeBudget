@@ -1,0 +1,67 @@
+.card {
+  background: white;
+  border: 1px solid #f3f4f6;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+}
+.field-label .input {
+  margin-top: 6px;
+}
+.input {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 15px;
+  background: white;
+}
+.input:focus {
+  outline: 2px solid rgb(15 118 110 / 0.3);
+  border-color: #0f766e;
+}
+.btn-download {
+  border-radius: 12px;
+  background: #0f766e;
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.btn-download:hover:not(:disabled) {
+  background: #0d5f59;
+}
+.btn-download:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.scope-toggle {
+  cursor: pointer;
+}
+.scope-off:hover {
+  background: #e5e7eb;
+}
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgb(255 255 255 / 0.4);
+  border-top-color: white;
+  border-radius: 9999px;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

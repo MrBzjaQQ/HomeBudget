@@ -7,52 +7,7 @@ import { AuthService } from '../../core/auth.service';
 @Component({
   selector: 'app-login',
   imports: [ReactiveFormsModule],
-  template: `
-    <div class="flex min-h-dvh items-center justify-center bg-gradient-to-br from-teal-700 to-teal-900 p-4">
-      <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-        <h1 class="text-center text-2xl font-bold text-gray-900">Домашний бюджет</h1>
-        <p class="mt-1 text-center text-sm text-gray-500">Вход в приложение</p>
-
-        @if (error()) {
-          <div class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error() }}</div>
-        }
-
-        <form [formGroup]="form" (ngSubmit)="submit()" class="mt-6 space-y-4">
-          <div>
-            <label for="username" class="mb-1 block text-sm font-medium text-gray-700">Логин</label>
-            <input
-              id="username"
-              type="text"
-              formControlName="username"
-              autocomplete="username"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/30"
-            />
-          </div>
-          <div>
-            <label for="password" class="mb-1 block text-sm font-medium text-gray-700">Пароль</label>
-            <input
-              id="password"
-              type="password"
-              formControlName="password"
-              autocomplete="current-password"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/30"
-            />
-          </div>
-          <button
-            type="submit"
-            [disabled]="busy()"
-            class="w-full rounded-lg bg-teal-700 py-3 text-base font-semibold text-white transition hover:bg-teal-800 disabled:opacity-50"
-          >
-            @if (busy()) {
-              Вход…
-            } @else {
-              Войти
-            }
-          </button>
-        </form>
-      </div>
-    </div>
-  `,
+  templateUrl: './login.component.html',
 })
 export class LoginComponent {
   private readonly fb = inject(NonNullableFormBuilder);

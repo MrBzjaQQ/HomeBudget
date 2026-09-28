@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using BudgetApi.Common;
+using Budget.Application.Common;
 
 namespace BudgetApi.Auth;
 

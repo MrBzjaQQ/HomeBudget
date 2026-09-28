@@ -1,0 +1,163 @@
+<div class="space-y-3">
+  @let resp = data();
+
+  <div class="card flex items-center justify-between">
+    <h1 class="text-lg font-bold text-gray-900">Бюджет</h1>
+    @if (!creating()) {
+      <button type="button" class="btn-add" (click)="startCreate()">+ добавить</button>
+    }
+  </div>
+
+  <div class="card flex items-center justify-between">
+    <button type="button" class="icon-btn" (click)="shiftMonth(-1)" aria-label="Предыдущий месяц">‹</button>
+    <span class="text-base font-semibold text-gray-900">{{ monthRef() | monthTitle }}</span>
+    <button type="button" class="icon-btn" (click)="shiftMonth(1)" aria-label="Следующий месяц">›</button>
+  </div>
+
+  @if (resp) {
+    @let totals = resp.totals;
+    <div class="card">
+      <h2 class="section-title">Итоги по месяцу</h2>
+      <div class="divide-y divide-gray-50">
+        <div class="flex items-center justify-between py-1.5 text-sm">
+          <span class="text-gray-500">План</span>
+          <span class="font-semibold text-gray-900">{{ totals.planned | money }} ₽</span>
+        </div>
+        <div class="flex items-center justify-between py-1.5 text-sm">
+          <span class="text-gray-500">Расходы</span>
+          <span class="font-semibold text-gray-900">{{ totals.actual | money }} ₽</span>
+        </div>
+        <div class="flex items-center justify-between py-1.5 text-sm">
+          <span class="text-gray-500">Разница</span>
+          <span
+            class="font-semibold"
+            [class.text-income]="totals.diff >= 0"
+            [class.text-expense]="totals.diff < 0"
+          >
+            {{ totals.diff | money }} ₽
+          </span>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (creating()) {
+    <div class="card space-y-2.5">
+      <div class="text-sm font-semibold text-gray-700">Новая позиция</div>
+      <select
+        class="input"
+        [ngModel]="draftCategoryId()"
+        (ngModelChange)="draftCategoryId.set($event)"
+        aria-label="Категория"
+      >
+        <option [ngValue]="null">— выберите категорию —</option>
+        @for (c of formCategories(); track c.id) {
+          <option [ngValue]="c.id">{{ c.label }}</option>
+        }
+      </select>
+      <input
+        type="number"
+        class="input"
+        [ngModel]="draftAmount()"
+        (ngModelChange)="draftAmount.set($event)"
+        placeholder="Сумма"
+        min="0"
+        step="0.01"
+        inputmode="decimal"
+        aria-label="Сумма"
+      />
+      <input
+        type="text"
+        class="input"
+        [ngModel]="draftNote()"
+        (ngModelChange)="draftNote.set($event)"
+        placeholder="Комментарий (необязательно)"
+        maxlength="500"
+        aria-label="Комментарий"
+      />
+      <div class="flex gap-2">
+        <button type="button" class="btn-sm btn-secondary" (click)="cancelForm()">Отмена</button>
+        <button type="button" class="btn-sm btn-primary" (click)="save()">Сохранить</button>
+      </div>
+    </div>
+  }
+
+  @if (loading() && !resp) {
+    <div class="card py-8 text-center text-sm text-gray-400">Загрузка…</div>
+  }
+
+  @if (resp && resp.items.length === 0 && !creating()) {
+    <div class="card py-10 text-center">
+      <p class="text-sm text-gray-400">План на месяц не задан. Добавьте первую позицию.</p>
+      <button type="button" class="btn-add mt-4" (click)="startCreate()">+ добавить</button>
+    </div>
+  }
+
+  @for (g of groups(); track g.row.categoryId) {
+    <div class="card p-0">
+      <div class="flex items-center justify-between gap-2 border-b border-gray-100 px-4 py-2.5">
+        <span class="flex min-w-0 items-center gap-2">
+          <span class="h-3 w-3 shrink-0 rounded-full" [style.background]="g.row.color || '#d1d5db'"></span>
+          <span class="group-name truncate text-sm font-semibold text-gray-800">{{ groupLabel(g.row) }}</span>
+        </span>
+        <span class="shrink-0 whitespace-nowrap text-xs text-gray-500">
+          план {{ g.row.planned | money }} ₽ <span class="text-gray-300">·</span> факт {{ g.row.actual | money }} ₽
+        </span>
+      </div>
+      <div class="divide-y divide-gray-50">
+        @for (item of g.items; track item.id) {
+          @if (editingId() === item.id) {
+            <div class="space-y-2.5 px-4 py-3">
+              <select
+                class="input"
+                [ngModel]="draftCategoryId()"
+                (ngModelChange)="draftCategoryId.set($event)"
+                aria-label="Категория"
+              >
+                <option [ngValue]="null">— выберите категорию —</option>
+                @for (c of formCategories(); track c.id) {
+                  <option [ngValue]="c.id">{{ c.label }}</option>
+                }
+              </select>
+              <input
+                type="number"
+                class="input"
+                [ngModel]="draftAmount()"
+                (ngModelChange)="draftAmount.set($event)"
+                placeholder="Сумма"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                aria-label="Сумма"
+              />
+              <input
+                type="text"
+                class="input"
+                [ngModel]="draftNote()"
+                (ngModelChange)="draftNote.set($event)"
+                placeholder="Комментарий (необязательно)"
+                maxlength="500"
+                aria-label="Комментарий"
+              />
+              <div class="flex gap-2">
+                <button type="button" class="btn-sm btn-secondary" (click)="cancelForm()">Отмена</button>
+                <button type="button" class="btn-sm btn-primary" (click)="save()">Сохранить</button>
+              </div>
+            </div>
+          } @else {
+            <div class="flex items-center gap-1 px-4 py-2">
+              <span class="min-w-0 flex-1 truncate text-sm text-gray-800">
+                {{ item.amount | money }} ₽
+                @if (item.note) {
+                  <span class="ml-2 text-xs text-gray-400">{{ item.note }}</span>
+                }
+              </span>
+              <button type="button" class="icon-btn shrink-0" (click)="startEdit(item)" title="Изменить">✎</button>
+              <button type="button" class="icon-btn icon-btn-danger shrink-0" (click)="remove(item)" title="Удалить">🗑</button>
+            </div>
+          }
+        }
+      </div>
+    </div>
+  }
+</div>

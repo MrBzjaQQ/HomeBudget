@@ -1,5 +1,6 @@
 using System.Text.Json;
-using BudgetApi.Data;
+using Budget.Infrastructure;
+using Budget.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -29,7 +30,8 @@ public sealed class BudgetApiFactory : WebApplicationFactory<Program>
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BudgetDbContext>();
-        await DbSeeder.SeedAsync(db);
+        var seeder = scope.ServiceProvider.GetRequiredService<DbSeeder>();
+        await seeder.SeedAsync(db);
     }
 }
 

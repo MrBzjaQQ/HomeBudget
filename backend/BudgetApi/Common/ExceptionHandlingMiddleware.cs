@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Budget.Application.Common;
 using Microsoft.AspNetCore.Http;
 
 namespace BudgetApi.Common;

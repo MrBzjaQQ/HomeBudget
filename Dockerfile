@@ -7,10 +7,9 @@ RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend
 WORKDIR /src
-COPY backend/BudgetApi/BudgetApi.csproj BudgetApi/
-RUN dotnet restore BudgetApi/BudgetApi.csproj
-COPY backend/ .
-RUN dotnet publish BudgetApi/BudgetApi.csproj -c Release -o /app/publish /p:UseAppHost=false
+COPY backend/ backend/
+RUN dotnet restore backend/BudgetApi/BudgetApi.csproj
+RUN dotnet publish backend/BudgetApi/BudgetApi.csproj -c Release -o /app/publish /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app

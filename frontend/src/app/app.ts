@@ -6,23 +6,7 @@ import { ToastService } from './core/toast.service';
 @Component({
   selector: 'app-root',
   imports: [RouterOutlet],
-  template: `
-    <router-outlet />
-    <div class="pointer-events-none fixed inset-x-0 top-3 z-50 flex flex-col items-center gap-2 px-4">
-      @for (toast of toasts.toasts(); track toast.id) {
-        <button
-          type="button"
-          (click)="toasts.dismiss(toast.id)"
-          class="pointer-events-auto max-w-md rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg"
-          [class]="
-            toast.kind === 'success' ? 'bg-green-700' : toast.kind === 'error' ? 'bg-red-700' : 'bg-gray-800'
-          "
-        >
-          {{ toast.message }}
-        </button>
-      }
-    </div>
-  `,
+  templateUrl: './app.html',
 })
 export class App {
   protected readonly toasts = inject(ToastService);

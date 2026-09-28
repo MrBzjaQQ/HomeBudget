@@ -70,29 +70,34 @@ gunzip -c backups/budget-<stamp>.sql.gz | docker compose exec -T postgres psql -
    npm start          # http://localhost:4200
    ```
 
-Миграции (при изменении схемы):
+Миграции (при изменении схемы; контекст и миграции живут в `Budget.Infrastructure`):
 
 ```bash
 cd backend/BudgetApi
-dotnet ef migrations add <Name>
+dotnet ef migrations add <Name> --project ..\Budget.Infrastructure
 ```
 
 ## Тесты
 
 ```bash
-cd backend/BudgetApi.Tests && dotnet test     # 34 API-теста (InMemory)
-cd frontend && npx ng test                    # 28 тестов (vitest + jsdom)
+cd backend/BudgetApi.Tests && dotnet test     # 104 API-теста (InMemory)
+cd frontend && npx ng test                    # 92 теста (vitest + jsdom)
 ```
 
 ## Структура
 
+Backend — Clean Architecture (подробно — в `BRIEF.md` в корне и в папках):
+
 ```
-backend/BudgetApi          Web API: контроллеры, EF Core, JWT, Excel (ClosedXML), Serilog
-backend/BudgetApi.Tests    xUnit-тесты API (WebApplicationFactory, InMemory)
-frontend                   Angular 22: features (journal, stats, categories, export, settings, …)
-scripts/backup.sh          pg_dump + ротация (7 последних)
-Dockerfile                 3 стадии: frontend → backend publish → aspnet runtime
-docker-compose.yml         postgres 16 + app (порт 8080)
+backend/Budget.Domain        сущности (User, Category, Transaction, …)
+backend/Budget.Application   сервисы, DTO, контракты (IUnitOfWork, I*Service)
+backend/Budget.Infrastructure EF Core: контекст, миграции, репозитории, BCrypt, Excel
+backend/BudgetApi            Web API: тонкие контроллеры, JWT, Serilog, Swagger
+backend/BudgetApi.Tests      xUnit-тесты API (WebApplicationFactory, InMemory)
+frontend                     Angular 22: features (journal, stats, categories, export, settings, …)
+scripts/backup.sh            pg_dump + ротация (7 последних)
+Dockerfile                   3 стадии: frontend → backend publish → aspnet runtime
+docker-compose.yml           postgres 16 + app (порт 8080)
 ```
 
 ## Безопасность

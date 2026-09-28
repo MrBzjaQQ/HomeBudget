@@ -1,0 +1,350 @@
+<div class="space-y-3">
+  <div class="card">
+    <div class="flex items-center justify-between">
+      <button
+        type="button"
+        class="icon-btn"
+        (click)="shiftMonth(-1)"
+        aria-label="Предыдущий месяц"
+      >
+        ‹
+      </button>
+      <div class="text-center">
+        <div class="text-base font-semibold text-gray-900" *ngIf="!customRange()">
+          {{ monthRef() | monthTitle }}
+        </div>
+        <div class="text-base font-semibold text-gray-900" *ngIf="customRange()">
+          {{ rangeFrom() | ruDate }} — {{ rangeTo() | ruDate }}
+        </div>
+        <div class="text-xs text-gray-400">журнал операций</div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        @if (!customRange() && serverMonth()) {
+          <button
+            type="button"
+            class="today-btn"
+            [disabled]="isServerMonth()"
+            (click)="goToday()"
+          >
+            Сегодня
+          </button>
+        }
+        <button
+          type="button"
+          class="icon-btn"
+          (click)="shiftMonth(1)"
+          aria-label="Следующий месяц"
+        >
+          ›
+        </button>
+      </div>
+    </div>
+
+    @let t = totals();
+    @if (t) {
+      <div class="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+        <div>
+          <div class="text-[11px] uppercase tracking-wide text-gray-400">Доходы</div>
+          <div class="text-sm font-bold text-income sm:text-base">{{ t.income | money }} ₽</div>
+        </div>
+        <div class="text-center">
+          <div class="text-[11px] uppercase tracking-wide text-gray-400">Расходы</div>
+          <div class="text-sm font-bold text-expense sm:text-base">{{ t.expense | money }} ₽</div>
+        </div>
+        <div class="text-right">
+          <div class="text-[11px] uppercase tracking-wide text-gray-400">Остаток</div>
+          <div
+            class="text-sm font-bold sm:text-base"
+            [class.text-income]="t.net >= 0"
+            [class.text-expense]="t.net < 0"
+          >
+            {{ t.net | money: true }} ₽
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+
+  <div class="card space-y-2.5">
+    <div class="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        class="chip"
+        [class.chip-active]="kindFilter() === null"
+        (click)="setKind(null)"
+      >
+        Все
+      </button>
+      <button
+        type="button"
+        class="chip"
+        [class.chip-active]="kindFilter() === 'INCOME'"
+        (click)="setKind('INCOME')"
+      >
+        Доходы
+      </button>
+      <button
+        type="button"
+        class="chip"
+        [class.chip-active]="kindFilter() === 'EXPENSE'"
+        (click)="setKind('EXPENSE')"
+      >
+        Расходы
+      </button>
+      <button
+        type="button"
+        class="chip"
+        [class.chip-active]="selectedCats().length > 0"
+        (click)="catPanelOpen.set(!catPanelOpen())"
+      >
+        Категории@if (selectedCats().length > 0) { ({{ selectedCats().length }}) }
+      </button>
+      <button
+        type="button"
+        class="chip"
+        [class.chip-active]="customRange()"
+        (click)="toggleCustomRange()"
+      >
+        Период
+      </button>
+      <span class="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          class="chip"
+          [class.chip-active]="sort() === 'date'"
+          (click)="setSort('date')"
+        >
+          По дате
+        </button>
+        <button
+          type="button"
+          class="chip"
+          [class.chip-active]="sort() === 'amount'"
+          (click)="setSort('amount')"
+        >
+          По сумме
+        </button>
+        <button type="button" class="chip" (click)="toggleDir()" [attr.aria-label]="'Направление сортировки'">
+          {{ dir() === 'desc' ? '↓' : '↑' }}
+        </button>
+      </span>
+    </div>
+
+    @if (catPanelOpen()) {
+      <div class="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-2">
+        @for (group of categoryGroups(); track group.kind) {
+          <div class="px-1 pt-1 text-[11px] font-semibold uppercase text-gray-400">
+            {{ group.kind === 'INCOME' ? 'Доходы' : 'Расходы' }}
+          </div>
+          @for (cat of group.items; track cat.id) {
+            <label
+              class="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm text-gray-700 hover:bg-white"
+              [class.cat-sel]="isCatSelected(cat.id)"
+            >
+              <input
+                type="checkbox"
+                class="accent-teal-700"
+                [checked]="isCatSelected(cat.id)"
+                (change)="toggleCat(cat.id)"
+              />
+              <span
+                class="inline-block h-2.5 w-2.5 rounded-full"
+                [style.background]="cat.color || '#d1d5db'"
+              ></span>
+              {{ catLabel(cat) }}
+            </label>
+          }
+        }
+      </div>
+    }
+
+    <div class="flex flex-wrap items-center gap-2">
+      <select
+        class="input h-9"
+        [value]="whoFilter() === null ? '' : whoFilter()"
+        (change)="setWho($any($event.target).value)"
+        aria-label="Кто"
+      >
+        <option value="">Кто: все</option>
+        @for (u of users(); track u.id) {
+          <option [value]="u.id">{{ u.displayName }}</option>
+        }
+      </select>
+      <input
+        type="text"
+        class="input h-9 min-w-40 flex-1"
+        placeholder="Поиск по комментарию…"
+        [value]="searchInput()"
+        (input)="searchInput.set($any($event.target).value)"
+      />
+      @if (hasFilters()) {
+        <button type="button" class="link-btn text-xs font-medium text-teal-700 underline" (click)="resetFilters()">
+          сбросить
+        </button>
+      }
+    </div>
+
+    @if (customRange()) {
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="text-xs text-gray-500">
+          с
+          <input type="date" class="input h-9" [value]="rangeFrom()" (change)="setRangeFrom($any($event.target).value)" />
+        </label>
+        <label class="text-xs text-gray-500">
+          по
+          <input type="date" class="input h-9" [value]="rangeTo()" (change)="setRangeTo($any($event.target).value)" />
+        </label>
+        <button type="button" class="link-btn text-xs font-medium text-teal-700 underline" (click)="toggleCustomRange()">
+          месяц
+        </button>
+      </div>
+    }
+  </div>
+
+  <div class="card p-0">
+    @if (loading()) {
+      <div class="p-6 text-center text-sm text-gray-400">Загрузка…</div>
+    } @else {
+      @let d = data();
+      @if (!d || d.items.length === 0) {
+      <div class="p-8 text-center">
+        <div class="text-3xl">🗒</div>
+        <div class="mt-2 text-sm text-gray-500">Операций нет</div>
+        <a routerLink="/transactions/new" class="mt-3 inline-block rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white">
+          + Добавить
+        </a>
+      </div>
+    } @else {
+      <div class="divide-y divide-gray-100 md:hidden">
+        @for (t of d.items; track t.id) {
+          <a
+            [routerLink]="['/transactions', t.id, 'edit']"
+            class="flex items-center gap-3 px-3 py-2.5 transition hover:bg-gray-50 sm:px-4"
+          >
+            <span
+              class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+              [style.background]="t.color || '#d1d5db'"
+            ></span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-sm font-medium text-gray-900">
+                {{ t.categoryParentName ? t.categoryParentName + ' / ' + t.categoryName : t.categoryName }}
+              </span>
+              <span class="block truncate text-xs text-gray-400">
+                {{ t.date | ruDate }} · {{ t.userDisplayName }}@if (t.note) { · {{ t.note }} }
+              </span>
+            </span>
+            <span class="text-right">
+              <span
+                class="block text-sm font-bold"
+                [class.text-income]="t.kind === 'INCOME'"
+                [class.text-expense]="t.kind === 'EXPENSE'"
+              >
+                {{ t.amount | money }} ₽
+              </span>
+            </span>
+            <button
+              type="button"
+              class="icon-btn icon-btn-danger"
+              (click)="$event.preventDefault(); $event.stopPropagation(); remove(t)"
+              aria-label="Удалить"
+            >
+              ✕
+            </button>
+          </a>
+        }
+      </div>
+
+      <div class="hidden md:block">
+        <table class="w-full border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-gray-100 text-left text-[11px] uppercase tracking-wide text-gray-400">
+              <th class="px-3 py-2.5 font-semibold">Дата</th>
+              <th class="px-3 py-2.5 font-semibold">Категория</th>
+              <th class="px-3 py-2.5 font-semibold">Комментарий</th>
+              <th class="px-3 py-2.5 font-semibold">Кто</th>
+              <th class="px-3 py-2.5 text-right font-semibold">Сумма</th>
+              <th class="w-20 px-3 py-2.5" aria-label="Действия"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (t of d.items; track t.id) {
+              <tr
+                class="cursor-pointer border-b border-gray-50 transition-colors last:border-0 hover:bg-gray-50"
+                (click)="edit(t)"
+              >
+                <td class="whitespace-nowrap px-3 py-2.5 text-gray-600">{{ t.date | ruDate }}</td>
+                <td class="px-3 py-2.5">
+                  <span class="flex items-center gap-2">
+                    <span
+                      class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                      [style.background]="t.color || '#d1d5db'"
+                    ></span>
+                    <span class="truncate font-medium text-gray-900">
+                      {{ t.categoryParentName ? t.categoryParentName + ' / ' + t.categoryName : t.categoryName }}
+                    </span>
+                  </span>
+                </td>
+                <td class="max-w-64 truncate px-3 py-2.5 text-gray-500">{{ t.note || '—' }}</td>
+                <td class="whitespace-nowrap px-3 py-2.5 text-gray-600">{{ t.userDisplayName }}</td>
+                <td
+                  class="whitespace-nowrap px-3 py-2.5 text-right font-bold"
+                  [class.text-income]="t.kind === 'INCOME'"
+                  [class.text-expense]="t.kind === 'EXPENSE'"
+                >
+                  {{ t.amount | money }} ₽
+                </td>
+                <td class="px-2 py-1.5">
+                  <span class="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      class="icon-btn icon-btn-sm"
+                      (click)="$event.stopPropagation(); edit(t)"
+                      aria-label="Изменить"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      type="button"
+                      class="icon-btn icon-btn-sm icon-btn-danger"
+                      (click)="$event.stopPropagation(); remove(t)"
+                      aria-label="Удалить"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      @if (d.total > d.items.length) {
+        <div class="flex items-center justify-between border-t border-gray-100 px-3 py-2 sm:px-4">
+          <button
+            type="button"
+            class="icon-btn"
+            [disabled]="page() <= 1"
+            (click)="setPage(page() - 1)"
+            [class.opacity-30]="page() <= 1"
+          >
+            ‹
+          </button>
+          <span class="text-xs text-gray-500">
+            стр. {{ page() }} из {{ totalPages() }} · всего {{ d.total }}
+          </span>
+          <button
+            type="button"
+            class="icon-btn"
+            [disabled]="page() >= totalPages()"
+            (click)="setPage(page() + 1)"
+            [class.opacity-30]="page() >= totalPages()"
+          >
+            ›
+          </button>
+        </div>
+      }
+      }
+    }
+  </div>
+</div>
