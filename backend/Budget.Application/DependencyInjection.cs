@@ -2,6 +2,7 @@ using Budget.Application.Auth;
 using Budget.Application.Budget;
 using Budget.Application.Categories;
 using Budget.Application.Export;
+using Budget.Application.Goals;
 using Budget.Application.Savings;
 using Budget.Application.Transactions;
 using Budget.Application.Users;
@@ -20,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<ITransactionService, TransactionService>();
         services.AddScoped<IBudgetService, BudgetService>();
         services.AddScoped<ISavingsService, SavingsService>();
+        services.AddScoped<IGoalsService, GoalsService>();
         services.AddScoped<IExportService, ExportService>();
 
         return services;

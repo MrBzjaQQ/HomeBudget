@@ -140,6 +140,52 @@ namespace Budget.Infrastructure.Data.Migrations
                     b.ToTable("categories", (string)null);
                 });
 
+            modelBuilder.Entity("Budget.Domain.Entities.FinancialGoal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ContainerId")
+                        .HasColumnType("integer")
+                        .HasColumnName("container_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("due_date");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<decimal>("TargetAmount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("target_amount");
+
+                    b.HasKey("Id")
+                        .HasName("pk_financial_goals");
+
+                    b.HasIndex("ContainerId")
+                        .HasDatabaseName("ix_financial_goals_container_id");
+
+                    b.ToTable("financial_goals", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_goal_amount_positive", "target_amount > 0");
+                        });
+                });
+
             modelBuilder.Entity("Budget.Domain.Entities.SavingsContainer", b =>
                 {
                     b.Property<int>("Id")
@@ -383,6 +429,18 @@ namespace Budget.Infrastructure.Data.Migrations
                     b.Navigation("Parent");
                 });
 
+            modelBuilder.Entity("Budget.Domain.Entities.FinancialGoal", b =>
+                {
+                    b.HasOne("Budget.Domain.Entities.SavingsContainer", "Container")
+                        .WithMany("Goals")
+                        .HasForeignKey("ContainerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_financial_goals_savings_containers_container_id");
+
+                    b.Navigation("Container");
+                });
+
             modelBuilder.Entity("Budget.Domain.Entities.SavingsEntry", b =>
                 {
                     b.HasOne("Budget.Domain.Entities.SavingsContainer", "Container")
@@ -437,6 +495,8 @@ namespace Budget.Infrastructure.Data.Migrations
             modelBuilder.Entity("Budget.Domain.Entities.SavingsContainer", b =>
                 {
                     b.Navigation("Entries");
+
+                    b.Navigation("Goals");
                 });
 
             modelBuilder.Entity("Budget.Domain.Entities.User", b =>

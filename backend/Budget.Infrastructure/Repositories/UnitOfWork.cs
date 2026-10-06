@@ -19,6 +19,8 @@ public sealed class UnitOfWork(BudgetDbContext db) : IUnitOfWork
 
     public IGenericRepository<SavingsEntry> SavingsEntries { get; } = new GenericRepository<SavingsEntry>(db);
 
+    public IGenericRepository<FinancialGoal> Goals { get; } = new GenericRepository<FinancialGoal>(db);
+
     public Task<int> SaveChangesAsync(CancellationToken token = default)
         => db.SaveChangesAsync(token);
 }

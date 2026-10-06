@@ -45,12 +45,15 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>Применяет миграции БД (схема обновляется автоматически при старте API).</summary>
+    /// <summary>Применяет миграции БД (схема обновляется автоматически при старте API; для нереляционных провайдеров, например InMemory, пропускается).</summary>
     public static async Task MigrateDatabaseAsync(this IHost app)
     {
         using var scope = app.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BudgetDbContext>();
-        await db.Database.MigrateAsync();
+        if (db.Database.IsRelational())
+        {
+            await db.Database.MigrateAsync();
+        }
     }
 
     /// <summary>Заполняет пустую базу стартовыми данными (администратор, категории, счета).</summary>

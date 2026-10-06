@@ -131,6 +131,11 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
             throw ApiErrorException.Conflict("В счете есть записи накоплений — сначала удалите их");
         }
 
+        if (await uow.Goals.Query.AnyAsync(x => x.ContainerId == id, ct))
+        {
+            throw ApiErrorException.Conflict("По счёту есть финансовые цели — сначала удалите их");
+        }
+
         uow.SavingsContainers.Remove(container);
         await uow.SaveChangesAsync(ct);
     }

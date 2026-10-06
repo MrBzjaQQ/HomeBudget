@@ -21,6 +21,12 @@ public static class ModelStateSanitizer
             {
                 var raw = error.ErrorMessage ?? string.Empty;
 
+                if (raw.StartsWith("A non-empty request body is required.", StringComparison.Ordinal))
+                {
+                    hadEmptyBody = true;
+                    continue;
+                }
+
                 if (key == "request")
                 {
                     if (raw.StartsWith("The request field is required.", StringComparison.Ordinal))

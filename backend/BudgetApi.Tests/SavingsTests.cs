@@ -209,6 +209,21 @@ public class SavingsTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Container_Delete_WithGoal_Returns409()
+    {
+        var containerId = await GetContainerIdAsync("Вклад");
+
+        var goal = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Отпуск", targetAmount = 100000, containerId });
+        Assert.Equal(201, goal.Status);
+
+        var result = await SendAsync(HttpMethod.Delete, $"/api/savings/containers/{containerId}");
+
+        Assert.Equal(409, result.Status);
+        Assert.Equal("Conflict", result.GetProperty<string>("code"));
+        Assert.Contains("финансовые цели", result.GetProperty<string>("message"));
+    }
+
+    [Fact]
     public async Task Entry_Create_ForNonAdmin_Returns201_AndVisibleInMonth()
     {
         var memberId = await CreateMemberAsync("ivan13", "Иван");

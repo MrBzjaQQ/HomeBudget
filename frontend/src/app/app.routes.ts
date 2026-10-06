@@ -50,6 +50,12 @@ export const routes: Routes = [
           import('./features/savings/savings.component').then((m) => m.SavingsComponent),
         title: 'Накопления — Бюджет',
       },
+      {
+        path: 'goals',
+        loadComponent: () =>
+          import('./features/goals/goals.component').then((m) => m.GoalsComponent),
+        title: 'Финансовые цели — Бюджет',
+      },
       { path: 'categories', component: CategoriesComponent, title: 'Категории — Бюджет' },
       { path: 'export', component: ExportComponent, title: 'Экспорт — Бюджет' },
       { path: 'settings', component: SettingsComponent, title: 'Настройки — Бюджет' },

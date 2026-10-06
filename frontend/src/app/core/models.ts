@@ -208,6 +208,27 @@ export interface SavingsEntryPayload {
   note?: string | null;
 }
 
+export interface GoalDto {
+  id: number;
+  name: string;
+  targetAmount: number;
+  containerId: number;
+  containerName: string;
+  containerColor: string | null;
+  dueDate: string | null; // 'yyyy-MM-dd'
+  saved: number;
+  monthlyRequired: number | null;
+  achieved: boolean;
+  createdAt: string;
+}
+
+export interface CreateGoalPayload {
+  name: string;
+  targetAmount: number;
+  containerId: number;
+  dueDate?: string | null; // 'yyyy-MM-dd'
+}
+
 export interface ApiErrorBody {
   code: string;
   message: string;

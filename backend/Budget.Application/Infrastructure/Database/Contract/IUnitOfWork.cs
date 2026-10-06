@@ -20,6 +20,8 @@ public interface IUnitOfWork
 
     IGenericRepository<SavingsEntry> SavingsEntries { get; }
 
+    IGenericRepository<FinancialGoal> Goals { get; }
+
     /// <summary>Сохраняет все накопленные изменения в базе данных.</summary>
     Task<int> SaveChangesAsync(CancellationToken token = default);
 }

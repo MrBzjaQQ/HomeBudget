@@ -13,4 +13,6 @@ public class SavingsContainer
     public DateTime CreatedAt { get; set; }
 
     public ICollection<SavingsEntry> Entries { get; set; } = new List<SavingsEntry>();
+
+    public ICollection<FinancialGoal> Goals { get; set; } = new List<FinancialGoal>();
 }

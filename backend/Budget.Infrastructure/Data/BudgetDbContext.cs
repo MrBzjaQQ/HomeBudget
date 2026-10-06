@@ -17,6 +17,8 @@ public class BudgetDbContext(DbContextOptions<BudgetDbContext> options) : DbCont
 
     public DbSet<SavingsEntry> SavingsEntries => Set<SavingsEntry>();
 
+    public DbSet<FinancialGoal> FinancialGoals => Set<FinancialGoal>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>
@@ -104,6 +106,19 @@ public class BudgetDbContext(DbContextOptions<BudgetDbContext> options) : DbCont
             entity.HasOne(x => x.User)
                 .WithMany(x => x.SavingsEntries)
                 .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<FinancialGoal>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.TargetAmount).HasPrecision(15, 2);
+            entity.ToTable(t => t.HasCheckConstraint("chk_goal_amount_positive", "target_amount > 0"));
+            entity.HasIndex(x => x.ContainerId);
+            entity.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            entity.HasOne(x => x.Container)
+                .WithMany(x => x.Goals)
+                .HasForeignKey(x => x.ContainerId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }
