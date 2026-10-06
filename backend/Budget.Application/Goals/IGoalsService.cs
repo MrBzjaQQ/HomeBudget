@@ -6,5 +6,7 @@ public interface IGoalsService
 
     Task<GoalDto> CreateAsync(CreateGoalRequest request, CancellationToken ct);
 
+    Task<GoalDto> UpdateAsync(int id, UpdateGoalRequest request, CancellationToken ct);
+
     Task DeleteAsync(int id, CancellationToken ct);
 }

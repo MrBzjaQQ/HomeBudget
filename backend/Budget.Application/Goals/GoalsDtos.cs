@@ -8,6 +8,14 @@ public record CreateGoalRequest
     public string? DueDate { get; set; }
 }
 
+public record UpdateGoalRequest
+{
+    public string? Name { get; set; }
+    public decimal? TargetAmount { get; set; }
+    public int? ContainerId { get; set; }
+    public string? DueDate { get; set; }
+}
+
 public record GoalDto(
     int Id,
     string Name,

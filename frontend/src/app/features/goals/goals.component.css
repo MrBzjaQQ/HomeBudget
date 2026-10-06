@@ -43,6 +43,20 @@
   background: #fef2f2;
   color: #dc2626;
 }
+.goal-action-btn {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+.goal-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.goal-details > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .input {
   width: 100%;
   border: 1px solid #e5e7eb;

@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CreateGoalPayload, GoalDto } from './models';
+import { CreateGoalPayload, GoalDto, UpdateGoalPayload } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class GoalsService {
@@ -13,6 +13,10 @@ export class GoalsService {
 
   createGoal(payload: CreateGoalPayload): Observable<GoalDto> {
     return this.http.post<GoalDto>('/api/goals', payload);
+  }
+
+  updateGoal(id: number, payload: UpdateGoalPayload): Observable<GoalDto> {
+    return this.http.put<GoalDto>(`/api/goals/${id}`, payload);
   }
 
   deleteGoal(id: number): Observable<void> {

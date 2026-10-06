@@ -229,6 +229,13 @@ export interface CreateGoalPayload {
   dueDate?: string | null; // 'yyyy-MM-dd'
 }
 
+export interface UpdateGoalPayload {
+  name: string;
+  targetAmount: number;
+  containerId: number;
+  dueDate: string | null; // 'yyyy-MM-dd'
+}
+
 export interface ApiErrorBody {
   code: string;
   message: string;

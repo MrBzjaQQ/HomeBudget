@@ -24,9 +24,68 @@ public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
 
     public async Task<GoalDto> CreateAsync(CreateGoalRequest request, CancellationToken ct)
     {
+        var validated = await ValidateRequestAsync(request.Name, request.TargetAmount, request.ContainerId, request.DueDate, ct);
+
+        var goal = new FinancialGoal
+        {
+            Name = validated.Name,
+            TargetAmount = validated.TargetAmount,
+            ContainerId = validated.ContainerId,
+            DueDate = validated.DueDate,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        await uow.Goals.AddAsync(goal, ct);
+        await uow.SaveChangesAsync(ct);
+
+        var created = await uow.Goals.Query.AsNoTracking()
+            .Include(g => g.Container)
+            .FirstAsync(g => g.Id == goal.Id, ct);
+
+        return (await BuildDtosAsync([created], ct)).Single();
+    }
+
+    public async Task<GoalDto> UpdateAsync(int id, UpdateGoalRequest request, CancellationToken ct)
+    {
+        var goal = await uow.Goals.Query.FirstOrDefaultAsync(g => g.Id == id, ct)
+            ?? throw ApiErrorException.NotFound("Цель не найдена");
+
+        var validated = await ValidateRequestAsync(request.Name, request.TargetAmount, request.ContainerId, request.DueDate, ct);
+
+        goal.Name = validated.Name;
+        goal.TargetAmount = validated.TargetAmount;
+        goal.ContainerId = validated.ContainerId;
+        goal.DueDate = validated.DueDate;
+
+        uow.Goals.Update(goal);
+        await uow.SaveChangesAsync(ct);
+
+        var updated = await uow.Goals.Query.AsNoTracking()
+            .Include(g => g.Container)
+            .FirstAsync(g => g.Id == goal.Id, ct);
+
+        return (await BuildDtosAsync([updated], ct)).Single();
+    }
+
+    public async Task DeleteAsync(int id, CancellationToken ct)
+    {
+        var goal = await uow.Goals.Query.FirstOrDefaultAsync(g => g.Id == id, ct)
+            ?? throw ApiErrorException.NotFound("Цель не найдена");
+
+        uow.Goals.Remove(goal);
+        await uow.SaveChangesAsync(ct);
+    }
+
+    private async Task<(string Name, decimal TargetAmount, int ContainerId, DateOnly? DueDate)> ValidateRequestAsync(
+        string? requestName,
+        decimal? requestTargetAmount,
+        int? requestContainerId,
+        string? requestDueDate,
+        CancellationToken ct)
+    {
         var errors = new Dictionary<string, string>();
 
-        var name = request.Name?.Trim();
+        var name = requestName?.Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
             errors["name"] = "Название не может быть пустым";
@@ -36,23 +95,23 @@ public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
             errors["name"] = "Название не длиннее 100 символов";
         }
 
-        if (request.TargetAmount is null || request.TargetAmount <= 0)
+        if (requestTargetAmount is null || requestTargetAmount <= 0)
         {
             errors["targetAmount"] = "Целевая сумма должна быть больше нуля";
         }
-        else if (request.TargetAmount > Validation.MaxAmount)
+        else if (requestTargetAmount > Validation.MaxAmount)
         {
             errors["targetAmount"] = $"Сумма не должна превышать {Validation.MaxAmount:N2}";
         }
 
         int? containerId = null;
-        if (request.ContainerId is null)
+        if (requestContainerId is null)
         {
             errors["containerId"] = "Счёт не найден";
         }
         else
         {
-            var container = await uow.SavingsContainers.Query.FirstOrDefaultAsync(c => c.Id == request.ContainerId.Value, ct);
+            var container = await uow.SavingsContainers.Query.FirstOrDefaultAsync(c => c.Id == requestContainerId.Value, ct);
             if (container is null)
             {
                 errors["containerId"] = "Счёт не найден";
@@ -64,9 +123,9 @@ public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
         }
 
         DateOnly? dueDate = null;
-        if (request.DueDate is not null)
+        if (requestDueDate is not null)
         {
-            if (DateOnly.TryParseExact(request.DueDate, DueDateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDueDate))
+            if (DateOnly.TryParseExact(requestDueDate, DueDateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDueDate))
             {
                 dueDate = parsedDueDate;
             }
@@ -81,32 +140,7 @@ public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
             throw ApiErrorException.BadRequest("Некорректные данные", errors);
         }
 
-        var goal = new FinancialGoal
-        {
-            Name = name!,
-            TargetAmount = request.TargetAmount!.Value,
-            ContainerId = containerId!.Value,
-            DueDate = dueDate,
-            CreatedAt = DateTime.UtcNow,
-        };
-
-        await uow.Goals.AddAsync(goal, ct);
-        await uow.SaveChangesAsync(ct);
-
-        var created = await uow.Goals.Query.AsNoTracking()
-            .Include(g => g.Container)
-            .FirstAsync(g => g.Id == goal.Id, ct);
-
-        return (await BuildDtosAsync([created], ct)).Single();
-    }
-
-    public async Task DeleteAsync(int id, CancellationToken ct)
-    {
-        var goal = await uow.Goals.Query.FirstOrDefaultAsync(g => g.Id == id, ct)
-            ?? throw ApiErrorException.NotFound("Цель не найдена");
-
-        uow.Goals.Remove(goal);
-        await uow.SaveChangesAsync(ct);
+        return (name!, requestTargetAmount!.Value, containerId!.Value, dueDate);
     }
 
     private async Task<List<GoalDto>> BuildDtosAsync(List<FinancialGoal> goals, CancellationToken ct)

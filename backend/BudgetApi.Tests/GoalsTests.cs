@@ -304,6 +304,247 @@ public class GoalsTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Update_ValidRequest_ReturnsUpdatedDto_AndPersistsInList()
+    {
+        var initialContainerId = await GetContainerIdAsync("Вклад");
+        var targetContainerId = await GetContainerIdAsync("Наличка");
+        var created = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Старая цель", targetAmount = 1000, containerId = initialContainerId });
+        Assert.Equal(201, created.Status);
+        var goalId = created.Json.GetProperty("id").GetInt32();
+        var createdAt = created.Json.GetProperty("createdAt").GetDateTime();
+        var dueDate = (await GetServerDateAsync()).AddMonths(3);
+
+        var updated = await SendAsync(HttpMethod.Put, $"/api/goals/{goalId}", new
+        {
+            name = "  Новый отпуск  ",
+            targetAmount = 90000,
+            containerId = targetContainerId,
+            dueDate = $"{dueDate:yyyy-MM-dd}",
+        });
+
+        Assert.Equal(200, updated.Status);
+        Assert.Equal(goalId, updated.Json.GetProperty("id").GetInt32());
+        Assert.Equal("Новый отпуск", updated.Json.GetProperty("name").GetString());
+        Assert.Equal(90000m, updated.Json.GetProperty("targetAmount").GetDecimal());
+        Assert.Equal(targetContainerId, updated.Json.GetProperty("containerId").GetInt32());
+        Assert.Equal("Наличка", updated.Json.GetProperty("containerName").GetString());
+        Assert.Equal("#f59e0b", updated.Json.GetProperty("containerColor").GetString());
+        Assert.Equal($"{dueDate:yyyy-MM-dd}", updated.Json.GetProperty("dueDate").GetString());
+        Assert.Equal(0m, updated.Json.GetProperty("saved").GetDecimal());
+        Assert.False(updated.Json.GetProperty("achieved").GetBoolean());
+        Assert.Equal(22500m, updated.Json.GetProperty("monthlyRequired").GetDecimal());
+        Assert.Equal(createdAt, updated.Json.GetProperty("createdAt").GetDateTime());
+
+        var list = await SendAsync(HttpMethod.Get, "/api/goals");
+        Assert.Equal(200, list.Status);
+        var persisted = FindGoal(list.Json, goalId);
+        Assert.Equal("Новый отпуск", persisted.GetProperty("name").GetString());
+        Assert.Equal(90000m, persisted.GetProperty("targetAmount").GetDecimal());
+        Assert.Equal(targetContainerId, persisted.GetProperty("containerId").GetInt32());
+        Assert.Equal("Наличка", persisted.GetProperty("containerName").GetString());
+        Assert.Equal("#f59e0b", persisted.GetProperty("containerColor").GetString());
+        Assert.Equal($"{dueDate:yyyy-MM-dd}", persisted.GetProperty("dueDate").GetString());
+    }
+
+    [Fact]
+    public async Task Update_ChangesContainer_LeavesSavingsEntriesIntact_AndRecalculatesDto()
+    {
+        var serverDate = await GetServerDateAsync();
+        var month = $"{serverDate:yyyy-MM}";
+        var userId = await CreateMemberAsync("goalupdate1", "Иван");
+        var initialContainerId = await GetContainerIdAsync("Вклад");
+        var targetContainerId = await GetContainerIdAsync("Наличка");
+        var initialEntry = await SendAsync(HttpMethod.Post, "/api/savings", new { month, userId, containerId = initialContainerId, amount = 12000 });
+        var targetEntry = await SendAsync(HttpMethod.Post, "/api/savings", new { month, userId, containerId = targetContainerId, amount = 8000 });
+        Assert.Equal(201, initialEntry.Status);
+        Assert.Equal(201, targetEntry.Status);
+        var initialEntryId = initialEntry.Json.GetProperty("id").GetInt64();
+        var targetEntryId = targetEntry.Json.GetProperty("id").GetInt64();
+
+        var created = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Покупка", targetAmount = 100000, containerId = initialContainerId });
+        Assert.Equal(201, created.Status);
+        var goalId = created.Json.GetProperty("id").GetInt32();
+
+        var updated = await SendAsync(HttpMethod.Put, $"/api/goals/{goalId}", new
+        {
+            name = "Покупка",
+            targetAmount = 50000,
+            containerId = targetContainerId,
+            dueDate = (string?)null,
+        });
+
+        Assert.Equal(200, updated.Status);
+        Assert.Equal(targetContainerId, updated.Json.GetProperty("containerId").GetInt32());
+        Assert.Equal("Наличка", updated.Json.GetProperty("containerName").GetString());
+        Assert.Equal(8000m, updated.Json.GetProperty("saved").GetDecimal());
+        Assert.False(updated.Json.GetProperty("achieved").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, updated.Json.GetProperty("monthlyRequired").ValueKind);
+
+        var entries = await SendAsync(HttpMethod.Get, $"/api/savings?month={month}");
+        Assert.Equal(200, entries.Status);
+        var persistedInitialEntry = entries.Json.GetProperty("entries").EnumerateArray().Single(e => e.GetProperty("id").GetInt64() == initialEntryId);
+        var persistedTargetEntry = entries.Json.GetProperty("entries").EnumerateArray().Single(e => e.GetProperty("id").GetInt64() == targetEntryId);
+        Assert.Equal(initialContainerId, persistedInitialEntry.GetProperty("containerId").GetInt32());
+        Assert.Equal(12000m, persistedInitialEntry.GetProperty("amount").GetDecimal());
+        Assert.Equal(targetContainerId, persistedTargetEntry.GetProperty("containerId").GetInt32());
+        Assert.Equal(8000m, persistedTargetEntry.GetProperty("amount").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Update_NullDueDate_ClearsExistingDate()
+    {
+        var containerId = await GetContainerIdAsync("Вклад");
+        var created = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Цель", targetAmount = 1000, containerId, dueDate = "2026-12-31" });
+        Assert.Equal(201, created.Status);
+        var goalId = created.Json.GetProperty("id").GetInt32();
+
+        var updated = await SendAsync(HttpMethod.Put, $"/api/goals/{goalId}", new
+        {
+            name = "Цель",
+            targetAmount = 1000,
+            containerId,
+            dueDate = (string?)null,
+        });
+
+        Assert.Equal(200, updated.Status);
+        Assert.Equal(JsonValueKind.Null, updated.Json.GetProperty("dueDate").ValueKind);
+        Assert.Equal(JsonValueKind.Null, updated.Json.GetProperty("monthlyRequired").ValueKind);
+    }
+
+    [Fact]
+    public async Task Update_ValidDueDate_ReturnsDateAndMonthlyRequired()
+    {
+        var containerId = await GetContainerIdAsync("Вклад");
+        var created = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Цель", targetAmount = 1000, containerId });
+        Assert.Equal(201, created.Status);
+        var goalId = created.Json.GetProperty("id").GetInt32();
+        var dueDate = (await GetServerDateAsync()).AddMonths(2);
+
+        var updated = await SendAsync(HttpMethod.Put, $"/api/goals/{goalId}", new
+        {
+            name = "Цель",
+            targetAmount = 90000,
+            containerId,
+            dueDate = $"{dueDate:yyyy-MM-dd}",
+        });
+
+        Assert.Equal(200, updated.Status);
+        Assert.Equal($"{dueDate:yyyy-MM-dd}", updated.Json.GetProperty("dueDate").GetString());
+        Assert.Equal(30000m, updated.Json.GetProperty("monthlyRequired").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Update_EmptyOrWhitespaceName_Returns400_WithErrorName()
+    {
+        var containerId = await GetContainerIdAsync("Вклад");
+        var created = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Цель", targetAmount = 1000, containerId });
+        Assert.Equal(201, created.Status);
+        var goalId = created.Json.GetProperty("id").GetInt32();
+
+        foreach (var name in new[] { "", "   " })
+        {
+            var result = await SendAsync(HttpMethod.Put, $"/api/goals/{goalId}", new { name, targetAmount = 1000, containerId });
+            Assert.Equal(400, result.Status);
+            Assert.Equal("ValidationFailed", result.GetProperty<string>("code"));
+            TestAsserts.HasError(result, "name");
+        }
+    }
+
+    [Fact]
+    public async Task Update_NameTooLong_Returns400_WithErrorName()
+    {
+        var containerId = await GetContainerIdAsync("Вклад");
+        var created = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Цель", targetAmount = 1000, containerId });
+        Assert.Equal(201, created.Status);
+        var goalId = created.Json.GetProperty("id").GetInt32();
+
+        var result = await SendAsync(HttpMethod.Put, $"/api/goals/{goalId}", new { name = new string('ц', 101), targetAmount = 1000, containerId });
+
+        Assert.Equal(400, result.Status);
+        TestAsserts.HasError(result, "name");
+    }
+
+    [Fact]
+    public async Task Update_InvalidTargetAmount_Returns400_WithErrorTargetAmount()
+    {
+        var containerId = await GetContainerIdAsync("Вклад");
+        var created = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Цель", targetAmount = 1000, containerId });
+        Assert.Equal(201, created.Status);
+        var goalId = created.Json.GetProperty("id").GetInt32();
+
+        foreach (var targetAmount in new[] { 0m, -100m, Validation.MaxAmount + 0.01m })
+        {
+            var result = await SendAsync(HttpMethod.Put, $"/api/goals/{goalId}", new { name = "Цель", targetAmount, containerId });
+            Assert.Equal(400, result.Status);
+            TestAsserts.HasError(result, "targetAmount");
+        }
+    }
+
+    [Fact]
+    public async Task Update_UnknownContainer_Returns400_WithErrorContainerId()
+    {
+        var containerId = await GetContainerIdAsync("Вклад");
+        var created = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Цель", targetAmount = 1000, containerId });
+        Assert.Equal(201, created.Status);
+        var goalId = created.Json.GetProperty("id").GetInt32();
+
+        var result = await SendAsync(HttpMethod.Put, $"/api/goals/{goalId}", new { name = "Цель", targetAmount = 1000, containerId = 99999 });
+
+        Assert.Equal(400, result.Status);
+        Assert.Equal("ValidationFailed", result.GetProperty<string>("code"));
+        TestAsserts.HasError(result, "containerId");
+        Assert.Equal("Счёт не найден", result.Json.GetProperty("errors").GetProperty("containerId").GetString());
+    }
+
+    [Fact]
+    public async Task Update_InvalidDueDate_Returns400_WithErrorDueDate()
+    {
+        var containerId = await GetContainerIdAsync("Вклад");
+        var created = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Цель", targetAmount = 1000, containerId });
+        Assert.Equal(201, created.Status);
+        var goalId = created.Json.GetProperty("id").GetInt32();
+
+        foreach (var dueDate in new[] { "2026-13-01", "01-01-2026", "" })
+        {
+            var result = await SendAsync(HttpMethod.Put, $"/api/goals/{goalId}", new { name = "Цель", targetAmount = 1000, containerId, dueDate });
+            Assert.Equal(400, result.Status);
+            TestAsserts.HasError(result, "dueDate");
+            Assert.Equal("Формат даты: yyyy-MM-dd", result.Json.GetProperty("errors").GetProperty("dueDate").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task Update_Missing_Returns404_NotFound()
+    {
+        var containerId = await GetContainerIdAsync("Вклад");
+
+        var result = await SendAsync(HttpMethod.Put, "/api/goals/99999", new { name = "Цель", targetAmount = 1000, containerId });
+
+        Assert.Equal(404, result.Status);
+        Assert.Equal("NotFound", result.GetProperty<string>("code"));
+        Assert.Equal("Цель не найдена", result.GetProperty<string>("message"));
+    }
+
+    [Fact]
+    public async Task Update_WithoutToken_Returns401()
+    {
+        var containerId = await GetContainerIdAsync("Вклад");
+        var created = await SendAsync(HttpMethod.Post, "/api/goals", new { name = "Цель", targetAmount = 1000, containerId });
+        Assert.Equal(201, created.Status);
+        var goalId = created.Json.GetProperty("id").GetInt32();
+
+        using var anonymous = Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/goals/{goalId}")
+        {
+            Content = System.Net.Http.Json.JsonContent.Create(new { name = "Изменённая цель", targetAmount = 2000, containerId }),
+        };
+
+        var response = await anonymous.SendAsync(request);
+
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Delete_Returns204_GoneFromList_ContainerAndEntriesIntact()
     {
         var serverDate = await GetServerDateAsync();

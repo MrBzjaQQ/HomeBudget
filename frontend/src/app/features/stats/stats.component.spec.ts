@@ -76,11 +76,13 @@ describe('StatsComponent', () => {
   let getSummarySpy: { calls: string[]; fn: (to: string) => Observable<SavingsSummary> };
   let summaryMonthSpy: { calls: Array<[string, string]> };
   let listGoalsSpy: { calls: number; fn: () => Observable<GoalDto[]> };
+  let updateGoalSpy: { calls: number };
 
   beforeEach(async () => {
     getSummarySpy = { calls: [], fn: () => of(summary) };
     summaryMonthSpy = { calls: [] };
     listGoalsSpy = { calls: 0, fn: () => of([]) };
+    updateGoalSpy = { calls: 0 };
     HTMLCanvasElement.prototype.getContext = (() => null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
     await TestBed.configureTestingModule({
       imports: [StatsComponent],
@@ -122,6 +124,10 @@ describe('StatsComponent', () => {
             listGoals: () => {
               listGoalsSpy.calls++;
               return listGoalsSpy.fn();
+            },
+            updateGoal: () => {
+              updateGoalSpy.calls++;
+              return of(undefined);
             },
           },
         },
@@ -178,6 +184,36 @@ describe('StatsComponent', () => {
     expect(cardText).toContain('40 000,00 ₽ / 100 000,00 ₽');
     expect(progress?.getAttribute('aria-valuenow')).toBe('40');
     expect(progress?.getAttribute('aria-valuetext')).toBe('40%');
+  });
+
+  it('оставляет_аналитику_целей_только_для_чтения', () => {
+    listGoalsSpy.fn = () =>
+      of([
+        {
+          id: 1,
+          name: 'Отпуск',
+          targetAmount: 100000,
+          containerId: 2,
+          containerName: 'Накопления',
+          containerColor: null,
+          dueDate: null,
+          saved: 40000,
+          monthlyRequired: null,
+          achieved: false,
+          createdAt: '2026-01-01T00:00:00Z',
+        },
+      ]);
+    const { fixture } = comp();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.textContent).toContain('Отпуск');
+    expect(
+      Array.from(el.querySelectorAll('button')).some((button) =>
+        button.textContent?.includes('Редактировать'),
+      ),
+    ).toBe(false);
+    expect(el.querySelector('input, select, textarea')).toBeNull();
+    expect(updateGoalSpy.calls).toBe(0);
   });
 
   it('показывает_достигнутую_цель_со_статусом_и_процентом_100', () => {

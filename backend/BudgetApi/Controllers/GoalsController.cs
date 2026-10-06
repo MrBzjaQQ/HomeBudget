@@ -29,6 +29,18 @@ public class GoalsController(IGoalsService goals) : ControllerBase
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<GoalDto>> Update(int id, [FromBody] UpdateGoalRequest request, CancellationToken ct)
+    {
+        if (request is null)
+        {
+            throw ApiErrorException.BadRequest("Пустое тело запроса");
+        }
+
+        var result = await goals.UpdateAsync(id, request, ct);
+        return Ok(result);
+    }
+
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {

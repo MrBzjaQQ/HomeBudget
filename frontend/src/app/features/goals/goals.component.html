@@ -7,21 +7,29 @@
       }
     </div>
 
-    @if (containers().length === 0) {
+    @if (containers().length === 0 && goals().length === 0) {
       <div class="px-4 py-8 text-center text-sm text-gray-400">
         Сначала добавьте счёт на странице «Накопления»
       </div>
     } @else if (loading() && goals().length === 0) {
       <div class="px-4 py-8 text-center text-sm text-gray-400">Загрузка…</div>
     } @else {
+      @if (containers().length === 0) {
+        <div class="px-4 py-4 text-center text-sm text-gray-400">
+          Сначала добавьте счёт на странице «Накопления»
+        </div>
+      }
+
       @if (showForm()) {
         <div class="space-y-2.5 border-b border-gray-100 px-4 py-3">
-          <div class="text-sm font-semibold text-gray-700">Новая цель</div>
+          <div class="text-sm font-semibold text-gray-700">
+            {{ editingGoalId() === null ? 'Новая цель' : 'Редактирование цели' }}
+          </div>
           <input
             type="text"
             class="input"
             [ngModel]="draftName()"
-            (ngModelChange)="draftName.set($event)"
+            (ngModelChange)="draftName.set($event); clearFormError()"
             placeholder="Название"
             maxlength="100"
             aria-label="Название цели"
@@ -30,7 +38,7 @@
             type="number"
             class="input"
             [ngModel]="draftAmount()"
-            (ngModelChange)="draftAmount.set($event)"
+            (ngModelChange)="draftAmount.set($event); clearFormError()"
             placeholder="Целевая сумма"
             min="0"
             step="0.01"
@@ -40,10 +48,15 @@
           <select
             class="input"
             [ngModel]="draftContainerId()"
-            (ngModelChange)="draftContainerId.set($event)"
+            (ngModelChange)="draftContainerId.set($event); clearFormError()"
             aria-label="Счёт"
           >
             <option [ngValue]="null">— выберите счёт —</option>
+            @if (editingGoal(); as currentGoal) {
+              @if (!hasContainer(currentGoal.containerId)) {
+                <option [ngValue]="currentGoal.containerId">{{ currentGoal.containerName }}</option>
+              }
+            }
             @for (c of containers(); track c.id) {
               <option [ngValue]="c.id">{{ c.name }}</option>
             }
@@ -52,14 +65,37 @@
             type="date"
             class="input"
             [ngModel]="draftDueDate()"
-            (ngModelChange)="draftDueDate.set($event)"
+            (ngModelChange)="draftDueDate.set($event); clearFormError()"
             aria-label="Дата достижения"
           />
+          @if (formError(); as error) {
+            <p class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+              {{ error }}
+            </p>
+          }
           <div class="flex gap-2">
-            <button type="button" class="btn-sm btn-secondary" (click)="cancelForm()">
+            <button
+              type="button"
+              class="btn-sm btn-secondary"
+              (click)="cancelForm()"
+              [disabled]="saving()"
+            >
               Отмена
             </button>
-            <button type="button" class="btn-sm btn-primary" (click)="saveGoal()">Сохранить</button>
+            <button
+              type="button"
+              class="btn-sm btn-primary"
+              (click)="saveGoal()"
+              [disabled]="saving() || containersLoadFailed()"
+            >
+              @if (saving()) {
+                Сохранение…
+              } @else if (editingGoalId() !== null) {
+                Сохранить изменения
+              } @else {
+                Сохранить
+              }
+            </button>
           </div>
         </div>
       }
@@ -79,15 +115,27 @@
                 <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
                   {{ g.name }}
                 </span>
-                <button
-                  type="button"
-                  class="icon-btn icon-btn-danger shrink-0"
-                  (click)="removeGoal(g)"
-                  title="Удалить"
-                  aria-label="Удалить цель"
-                >
-                  🗑
-                </button>
+                <div class="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    class="icon-btn goal-action-btn"
+                    (click)="startEdit(g)"
+                    [disabled]="showForm()"
+                    title="Редактировать цель"
+                    aria-label="Редактировать цель"
+                  >
+                    <span aria-hidden="true">✎</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn icon-btn-danger goal-action-btn"
+                    (click)="removeGoal(g)"
+                    title="Удалить"
+                    aria-label="Удалить цель"
+                  >
+                    🗑
+                  </button>
+                </div>
               </div>
               <div
                 class="progress-track"
@@ -98,7 +146,7 @@
               >
                 <div class="progress-fill" [style.width.%]="progressPercent(g)"></div>
               </div>
-              <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <div class="goal-details flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <span class="text-gray-600">Цель: {{ g.targetAmount | money }} ₽</span>
                 <span class="text-gray-600">Накоплено: {{ g.saved | money }} ₽</span>
                 @if (g.dueDate) {
