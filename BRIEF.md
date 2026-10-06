@@ -45,7 +45,7 @@ Budget.Domain (сущности: User, Category, Transaction, BudgetItem, Saving
 │   └── BudgetApi.Tests/    # xUnit-тесты API (BRIEF.md)
 ├── frontend/               # Angular (BRIEF.md в этой папке)
 │   └── src/                # BRIEF.md; src/app/ — BRIEF.md
-├── docs/                   # ТЗ и артефакты Spec-Driven-Design (BRIEF.md)
+├── docs/                   # Master-спецификация, ТЗ и артефакты Spec-Driven-Design (BRIEF.md)
 ├── examples/               # эталон Clean Architecture (LotDocumentationStatistics)
 ├── k8s/, scripts/          # деплой и утилиты
 ├── Dockerfile, docker-compose.yml  # продакшен: один контейнер (API + SPA + БД отдельно)
