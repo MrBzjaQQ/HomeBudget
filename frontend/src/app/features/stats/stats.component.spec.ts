@@ -4,7 +4,8 @@ import { Observable, of } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { BudgetService } from '../../core/budget.service';
 import { CategoriesService } from '../../core/categories.service';
-import { BudgetMonthResponse, SavingsSummary } from '../../core/models';
+import { GoalsService } from '../../core/goals.service';
+import { BudgetMonthResponse, GoalDto, SavingsSummary } from '../../core/models';
 import { SavingsService } from '../../core/savings.service';
 import { ToastService } from '../../core/toast.service';
 import { TransactionsService } from '../../core/transactions.service';
@@ -74,10 +75,12 @@ interface StatsComponentApi {
 describe('StatsComponent', () => {
   let getSummarySpy: { calls: string[]; fn: (to: string) => Observable<SavingsSummary> };
   let summaryMonthSpy: { calls: Array<[string, string]> };
+  let listGoalsSpy: { calls: number; fn: () => Observable<GoalDto[]> };
 
   beforeEach(async () => {
     getSummarySpy = { calls: [], fn: () => of(summary) };
     summaryMonthSpy = { calls: [] };
+    listGoalsSpy = { calls: 0, fn: () => of([]) };
     HTMLCanvasElement.prototype.getContext = (() => null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
     await TestBed.configureTestingModule({
       imports: [StatsComponent],
@@ -113,6 +116,15 @@ describe('StatsComponent', () => {
             },
           },
         },
+        {
+          provide: GoalsService,
+          useValue: {
+            listGoals: () => {
+              listGoalsSpy.calls++;
+              return listGoalsSpy.fn();
+            },
+          },
+        },
         ToastService,
       ],
     });
@@ -132,6 +144,95 @@ describe('StatsComponent', () => {
 
     expect(getSummarySpy.calls[0]).toBe('2026-08');
     expect(c.savingsSummary()).toBe(summary);
+  });
+
+  it('запрашивает_цели_один_раз_при_инициализации', () => {
+    comp();
+
+    expect(listGoalsSpy.calls).toBe(1);
+  });
+
+  it('показывает_название_суммы_и_процент_частично_достигнутой_цели', () => {
+    listGoalsSpy.fn = () =>
+      of([
+        {
+          id: 1,
+          name: 'Отпуск',
+          targetAmount: 100000,
+          containerId: 2,
+          containerName: 'Накопления',
+          containerColor: null,
+          dueDate: null,
+          saved: 40000,
+          monthlyRequired: null,
+          achieved: false,
+          createdAt: '2026-01-01T00:00:00Z',
+        },
+      ]);
+    const { fixture } = comp();
+    const el = fixture.nativeElement as HTMLElement;
+    const progress = el.querySelector('[role="progressbar"]');
+    const cardText = el.textContent?.replace(/\s+/g, ' ') ?? '';
+
+    expect(cardText).toContain('Отпуск');
+    expect(cardText).toContain('40 000,00 ₽ / 100 000,00 ₽');
+    expect(progress?.getAttribute('aria-valuenow')).toBe('40');
+    expect(progress?.getAttribute('aria-valuetext')).toBe('40%');
+  });
+
+  it('показывает_достигнутую_цель_со_статусом_и_процентом_100', () => {
+    listGoalsSpy.fn = () =>
+      of([
+        {
+          id: 1,
+          name: 'Резерв',
+          targetAmount: 50000,
+          containerId: 2,
+          containerName: 'Накопления',
+          containerColor: null,
+          dueDate: null,
+          saved: 50000,
+          monthlyRequired: null,
+          achieved: true,
+          createdAt: '2026-01-01T00:00:00Z',
+        },
+      ]);
+    const { fixture } = comp();
+    const el = fixture.nativeElement as HTMLElement;
+    const progress = el.querySelector('[role="progressbar"]');
+
+    expect(el.textContent).toContain('Цель достигнута');
+    expect(progress?.getAttribute('aria-valuenow')).toBe('100');
+    expect(progress?.getAttribute('aria-valuetext')).toBe('100%');
+  });
+
+  it('показывает_пустое_состояние_при_отсутствии_целей', () => {
+    listGoalsSpy.fn = () => of([]);
+    const { fixture } = comp();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.textContent).toContain('Финансовых целей пока нет');
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('показывает_ошибку_запроса_отдельно_от_пустого_состояния', () => {
+    listGoalsSpy.fn = () =>
+      new Observable<GoalDto[]>((subscriber) =>
+        subscriber.error({ error: { code: 'GOALS_FAILED', message: 'Не удалось загрузить цели' } }),
+      );
+    const { fixture } = comp();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('Не удалось загрузить цели');
+    expect(el.textContent).not.toContain('Финансовых целей пока нет');
+  });
+
+  it('не_запрашивает_цели_повторно_при_смене_месяца', () => {
+    const { component: c } = comp();
+
+    c.shiftMonth(-1);
+
+    expect(listGoalsSpy.calls).toBe(1);
   });
 
   it('renders the line chart with 12 monthly amounts of the window', () => {

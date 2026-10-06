@@ -116,6 +116,49 @@
   </div>
 
   <div class="card">
+    <h2 class="section-title">Прогресс финансовых целей</h2>
+    @if (goalsLoading()) {
+      <div class="py-8 text-center text-sm text-gray-400" role="status">Загрузка финансовых целей…</div>
+    } @else if (goalsError()) {
+      <div class="py-8 text-center text-sm text-expense" role="alert">{{ goalsError() }}</div>
+    } @else if (goals().length === 0) {
+      <div class="py-8 text-center text-sm text-gray-400">Финансовых целей пока нет</div>
+    } @else {
+      <div class="space-y-4">
+        @for (goal of goals(); track goal.id) {
+          @let progress = progressPercent(goal);
+          <div>
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate text-sm font-medium text-gray-900">{{ goal.name }}</div>
+                <div class="mt-0.5 text-xs text-gray-500">
+                  {{ goal.saved | money }} ₽ / {{ goal.targetAmount | money }} ₽
+                </div>
+              </div>
+              @if (goal.achieved) {
+                <span class="shrink-0 rounded-full bg-income/10 px-2 py-1 text-xs font-medium text-income">
+                  Цель достигнута
+                </span>
+              }
+            </div>
+            <div
+              class="mt-2 h-2 overflow-hidden rounded-full bg-gray-100"
+              role="progressbar"
+              [attr.aria-label]="'Прогресс цели ' + goal.name"
+              [attr.aria-valuenow]="progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-valuetext]="progress + '%'"
+            >
+              <div class="h-full rounded-full bg-teal-700 transition-[width]" [style.width.%]="progress"></div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <div class="card">
     <h2 class="section-title">Динамика за 12 месяцев</h2>
     <div class="h-56">
       <canvas

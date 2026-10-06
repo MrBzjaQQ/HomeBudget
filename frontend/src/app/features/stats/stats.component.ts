@@ -6,10 +6,13 @@ import { BaseChartDirective } from 'ng2-charts';
 import { AuthService } from '../../core/auth.service';
 import { BudgetService } from '../../core/budget.service';
 import { CategoriesService } from '../../core/categories.service';
+import { GoalsService } from '../../core/goals.service';
 import {
+  ApiError,
   BudgetCategoryRow,
   BudgetTotalsDto,
   CategoryDto,
+  GoalDto,
   SavingsSummary,
 } from '../../core/models';
 import { MonthTitlePipe, MoneyPipe, formatMoney } from '../../core/format.pipe';
@@ -44,6 +47,7 @@ export class StatsComponent {
   private readonly txns = inject(TransactionsService);
   private readonly cats = inject(CategoriesService);
   private readonly budget = inject(BudgetService);
+  private readonly goalsService = inject(GoalsService);
   private readonly savings = inject(SavingsService);
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
@@ -61,6 +65,9 @@ export class StatsComponent {
   protected readonly budgetTotals = signal<BudgetTotalsDto | null>(null);
 
   protected readonly savingsSummary = signal<SavingsSummary | null>(null);
+  protected readonly goals = signal<GoalDto[]>([]);
+  protected readonly goalsLoading = signal(true);
+  protected readonly goalsError = signal<string | null>(null);
 
   private readonly windowEnd = computed(() => {
     const selected = this.monthRef();
@@ -287,6 +294,7 @@ export class StatsComponent {
       }
     });
     this.reload();
+    this.loadGoals();
   }
 
   private serverMonth(): { year: number; month: number } | null {
@@ -305,6 +313,32 @@ export class StatsComponent {
   protected shareOf(value: number): number {
     const total = this.expenseTotal();
     return total > 0 ? Math.round((value / total) * 100) : 0;
+  }
+
+  protected progressPercent(goal: GoalDto): number {
+    if (goal.achieved) {
+      return 100;
+    }
+    if (goal.targetAmount <= 0) {
+      return 0;
+    }
+    return Math.min(100, (goal.saved / goal.targetAmount) * 100);
+  }
+
+  private loadGoals(): void {
+    this.goalsService
+      .listGoals()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => {
+          this.goals.set(list);
+          this.goalsLoading.set(false);
+        },
+        error: (err) => {
+          this.goalsError.set(ApiError.from(err).message);
+          this.goalsLoading.set(false);
+        },
+      });
   }
 
   private reload(): void {
