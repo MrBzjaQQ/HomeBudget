@@ -123,8 +123,9 @@
 
 - Frontend: Angular 22, TypeScript strict, standalone-компоненты, signals, zoneless change detection, Tailwind CSS 4, Chart.js; компонентные тесты — vitest.
 - Backend: ASP.NET Core 10 Web API, Clean Architecture, EF Core 10; интеграционные тесты — xUnit.
-- Слои backend: `Budget.Domain` → `Budget.Application` → `Budget.Infrastructure` → `BudgetApi`; контроллеры работают через Application-сервисы, без прямого доступа к `DbContext`.
-- Хранилище: PostgreSQL 16, имена столбцов snake_case. Миграции EF Core находятся в `backend/Budget.Infrastructure` и применяются при старте API.
+- Слои backend: `Budget.Domain` → `Budget.Application` → `Budget.Infrastructure` → `BudgetApi`; контроллеры работают через Application-сервисы, без прямого доступа к `DbContext`. DTO разделены по типам, а публичный API production-проектов сопровождается генерируемой XML-документацией на русском языке.
+- Маппинг каждой EF-сущности задаётся отдельной конфигурацией; контекст отвечает за сохранение данных и обновление `UpdatedAt`.
+- Хранилище: PostgreSQL 16, имена столбцов snake_case. Миграции EF Core находятся в `backend/Budget.Infrastructure` и применяются при старте API. Строка подключения задаётся извне через `ConnectionStrings:Default`; инструменты разработки используют тот же ключ и явно сообщают об отсутствии настройки.
 - Разработка: frontend `http://localhost:4200`, прокси `/api` на API `http://localhost:5080`.
 - Продакшен: Docker Compose, API также раздаёт собранный SPA; адрес приложения в локальной сети обычно `http://localhost:8080`.
 

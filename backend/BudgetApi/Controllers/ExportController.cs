@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace BudgetApi.Controllers;
 
+/// <summary>Предоставляет HTTP-загрузку месячных и годовых Excel-отчётов.</summary>
+/// <param name="export">Сервис подготовки данных для экспортируемого периода.</param>
+/// <param name="exporter">Служба формирования XLSX-файла.</param>
 [ApiController]
 [Route("api/export")]
 [Authorize]
@@ -13,6 +16,12 @@ public class ExportController(IExportService export, IExcelExportService exporte
 {
     private const string XlsxMimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+    /// <summary>Формирует и возвращает XLSX-отчёт за один месяц.</summary>
+    /// <param name="year">Год отчёта в поддерживаемом диапазоне.</param>
+    /// <param name="month">Номер месяца от 1 до 12.</param>
+    /// <param name="userId">Необязательный идентификатор пользователя для отбора операций.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Загружаемый файл Excel за указанный месяц.</returns>
     [HttpGet("month")]
     public async Task<IActionResult> Month([FromQuery] int year, [FromQuery] int month, [FromQuery] int? userId, CancellationToken ct)
     {
@@ -30,6 +39,11 @@ public class ExportController(IExportService export, IExcelExportService exporte
         return File(bytes, XlsxMimeType, fileName);
     }
 
+    /// <summary>Формирует и возвращает XLSX-отчёт за календарный год.</summary>
+    /// <param name="year">Год отчёта в поддерживаемом диапазоне.</param>
+    /// <param name="userId">Необязательный идентификатор пользователя для отбора операций.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Загружаемый файл Excel за указанный год.</returns>
     [HttpGet("year")]
     public async Task<IActionResult> Year([FromQuery] int year, [FromQuery] int? userId, CancellationToken ct)
     {

@@ -4,12 +4,18 @@ using ClosedXML.Excel;
 
 namespace Budget.Infrastructure.Export;
 
+/// <summary>Формирует книги Excel с данными операций за месяц или календарный год.</summary>
 public sealed class ExcelExportService : IExcelExportService
 {
     private static readonly CultureInfo Ru = new("ru-RU");
     private const string MoneyFormat = "#,##0.00";
     private const string DateFormat = "dd.mm.yyyy";
 
+    /// <summary>Создаёт книгу с операциями и разбивкой расходов по категориям за месяц.</summary>
+    /// <param name="data">Строки операций и подпись пользователя для экспорта.</param>
+    /// <param name="year">Год экспортируемого периода.</param>
+    /// <param name="month">Номер месяца от 1 до 12.</param>
+    /// <returns>Содержимое книги в формате XLSX.</returns>
     public byte[] BuildMonthFile(ExportData data, int year, int month)
     {
         using var workbook = new XLWorkbook();
@@ -18,6 +24,10 @@ public sealed class ExcelExportService : IExcelExportService
         return Save(workbook);
     }
 
+    /// <summary>Создаёт книгу с отдельным листом на каждый месяц и годовой сводкой.</summary>
+    /// <param name="data">Строки операций за год и подпись пользователя для экспорта.</param>
+    /// <param name="year">Год, для которого строится книга.</param>
+    /// <returns>Содержимое книги в формате XLSX.</returns>
     public byte[] BuildYearFile(ExportData data, int year)
     {
         using var workbook = new XLWorkbook();

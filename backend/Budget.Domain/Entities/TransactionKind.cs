@@ -1,9 +1,11 @@
 ﻿namespace Budget.Domain.Entities;
 
-/// <summary>Direction of a transaction. Stored on the transaction itself so history
-/// survives category reorganisation.</summary>
+/// <summary>Направление операции, сохраняемое в истории независимо от изменения категорий.</summary>
 public enum TransactionKind
 {
+    /// <summary>Поступление денежных средств.</summary>
     Income,
+
+    /// <summary>Расход денежных средств.</summary>
     Expense
 }

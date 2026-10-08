@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Budget.Application.Export;
 
+/// <summary>Собирает операции, участников и категории в набор для экспорта.</summary>
+/// <param name="uow">Рабочая единица доступа к данным операций и справочников.</param>
 public sealed class ExportService(IUnitOfWork uow) : IExportService
 {
     private sealed record TransactionExportRow(
@@ -15,7 +17,12 @@ public sealed class ExportService(IUnitOfWork uow) : IExportService
         string? Note,
         string UserName);
 
-    /// <summary>Single query for the whole period; month splitting and sheet building happen in the exporter.</summary>
+    /// <summary>Загружает операции выбранного периода; разбиение на листы выполняет экспортёр.</summary>
+    /// <param name="from">Начальная дата периода, включительно.</param>
+    /// <param name="to">Конечная дата периода, включительно.</param>
+    /// <param name="userId">Идентификатор пользователя или null для всей семьи.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Данные операций и подпись охвата экспорта.</returns>
     public async Task<ExportData> GetExportDataAsync(DateOnly from, DateOnly to, int? userId, CancellationToken ct)
     {
         var whoLabel = "вся семья";

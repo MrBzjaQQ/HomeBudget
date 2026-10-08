@@ -5,8 +5,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Budget.Application.Categories;
 
+/// <summary>Реализует проверки и операции над группами категорий и подкатегориями.</summary>
+/// <param name="uow">Рабочая единица доступа к категориям и связанным данным.</param>
 public sealed class CategoryService(IUnitOfWork uow) : ICategoryService
 {
+    /// <summary>Формирует упорядоченное дерево с учётом типа и состояния архивации.</summary>
+    /// <param name="kind">Необязательное направление операций для отбора.</param>
+    /// <param name="includeArchived">Включать ли архивированные элементы.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Список корневых категорий с дочерними категориями.</returns>
     public async Task<IReadOnlyList<CategoryTreeDto>> ListAsync(TransactionKind? kind, bool includeArchived, CancellationToken ct)
     {
         var query = uow.Categories.Query.AsNoTracking().Include(c => c.Children).AsQueryable();
@@ -29,6 +36,10 @@ public sealed class CategoryService(IUnitOfWork uow) : ICategoryService
         return groups.Select(g => ToTreeDto(g, childrenById)).ToList();
     }
 
+    /// <summary>Проверяет уникальность и иерархию, затем создаёт категорию.</summary>
+    /// <param name="request">Данные группы или подкатегории.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Дерево, содержащее созданную категорию.</returns>
     public async Task<CategoryTreeDto> CreateAsync(CreateCategoryRequest request, CancellationToken ct)
     {
         var name = request.Name?.Trim();
@@ -37,7 +48,7 @@ public sealed class CategoryService(IUnitOfWork uow) : ICategoryService
         {
             errors["name"] = "Название не может быть пустым";
         }
-        else if (name.Length > 100)
+        else if (name.Length > Validation.MaxNameLength)
         {
             errors["name"] = "Название не длиннее 100 символов";
         }
@@ -101,6 +112,11 @@ public sealed class CategoryService(IUnitOfWork uow) : ICategoryService
         return await GetTreeDtoAsync(category.Id, ct);
     }
 
+    /// <summary>Проверяет и применяет изменения существующей категории.</summary>
+    /// <param name="id">Идентификатор категории.</param>
+    /// <param name="request">Изменяемые значения категории.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Дерево, содержащее обновлённую категорию.</returns>
     public async Task<CategoryTreeDto> UpdateAsync(int id, UpdateCategoryRequest request, CancellationToken ct)
     {
         var category = await uow.Categories.Query.FirstOrDefaultAsync(c => c.Id == id, ct)
@@ -114,7 +130,7 @@ public sealed class CategoryService(IUnitOfWork uow) : ICategoryService
             {
                 errors["name"] = "Название не может быть пустым";
             }
-            else if (name.Length > 100)
+            else if (name.Length > Validation.MaxNameLength)
             {
                 errors["name"] = "Название не длиннее 100 символов";
             }
@@ -164,6 +180,9 @@ public sealed class CategoryService(IUnitOfWork uow) : ICategoryService
         return await GetTreeDtoAsync(category.Id, ct);
     }
 
+    /// <summary>Удаляет категорию, если у неё нет дочерних категорий и связанных данных.</summary>
+    /// <param name="id">Идентификатор категории.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
     public async Task DeleteAsync(int id, CancellationToken ct)
     {
         var category = await uow.Categories.Query.Include(c => c.Children).FirstOrDefaultAsync(c => c.Id == id, ct)

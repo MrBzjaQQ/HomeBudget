@@ -7,10 +7,15 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace BudgetApi.Auth;
 
+/// <summary>Формирует подписанные JWT для аутентифицированных пользователей.</summary>
+/// <param name="optionsAccessor">Настройки издателя, аудитории, ключа и срока действия токена.</param>
 public sealed class JwtTokenService(IOptions<JwtOptions> optionsAccessor)
 {
     private readonly JwtOptions _options = optionsAccessor.Value;
 
+    /// <summary>Создаёт JWT с идентификатором, логином и отображаемым именем пользователя.</summary>
+    /// <param name="user">Пользователь, чьи данные включаются в claims токена.</param>
+    /// <returns>Подписанный компактный JWT в виде строки.</returns>
     public string CreateToken(User user)
     {
         var now = DateTime.UtcNow;

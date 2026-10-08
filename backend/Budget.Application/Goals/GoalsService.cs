@@ -6,11 +6,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Budget.Application.Goals;
 
+/// <summary>Ведёт цели накоплений и рассчитывает текущий прогресс по связанным счетам.</summary>
+/// <param name="uow">Рабочая единица доступа к целям, счетам и накоплениям.</param>
 public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
 {
-    private const string DueDateFormat = "yyyy-MM-dd";
-    private const string DueDateError = "Формат даты: yyyy-MM-dd";
-
+    /// <summary>Загружает финансовые цели и строит их представления с прогрессом.</summary>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Список целей с текущей суммой накоплений.</returns>
     public async Task<List<GoalDto>> ListAsync(CancellationToken ct)
     {
         var goals = await uow.Goals.Query.AsNoTracking()
@@ -22,6 +24,10 @@ public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
         return await BuildDtosAsync(goals, ct);
     }
 
+    /// <summary>Проверяет данные и создаёт финансовую цель.</summary>
+    /// <param name="request">Поля создаваемой цели.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Созданная цель с рассчитанным прогрессом.</returns>
     public async Task<GoalDto> CreateAsync(CreateGoalRequest request, CancellationToken ct)
     {
         var validated = await ValidateRequestAsync(request.Name, request.TargetAmount, request.ContainerId, request.DueDate, ct);
@@ -45,6 +51,11 @@ public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
         return (await BuildDtosAsync([created], ct)).Single();
     }
 
+    /// <summary>Проверяет и сохраняет новые значения финансовой цели.</summary>
+    /// <param name="id">Идентификатор изменяемой цели.</param>
+    /// <param name="request">Новые значения цели.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Обновлённая цель с рассчитанным прогрессом.</returns>
     public async Task<GoalDto> UpdateAsync(int id, UpdateGoalRequest request, CancellationToken ct)
     {
         var goal = await uow.Goals.Query.FirstOrDefaultAsync(g => g.Id == id, ct)
@@ -67,6 +78,9 @@ public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
         return (await BuildDtosAsync([updated], ct)).Single();
     }
 
+    /// <summary>Удаляет финансовую цель.</summary>
+    /// <param name="id">Идентификатор удаляемой цели.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
     public async Task DeleteAsync(int id, CancellationToken ct)
     {
         var goal = await uow.Goals.Query.FirstOrDefaultAsync(g => g.Id == id, ct)
@@ -90,7 +104,7 @@ public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
         {
             errors["name"] = "Название не может быть пустым";
         }
-        else if (name.Length > 100)
+        else if (name.Length > Validation.MaxNameLength)
         {
             errors["name"] = "Название не длиннее 100 символов";
         }
@@ -125,13 +139,13 @@ public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
         DateOnly? dueDate = null;
         if (requestDueDate is not null)
         {
-            if (DateOnly.TryParseExact(requestDueDate, DueDateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDueDate))
+            if (DateOnly.TryParseExact(requestDueDate, DateFormats.Date, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDueDate))
             {
                 dueDate = parsedDueDate;
             }
             else
             {
-                errors["dueDate"] = DueDateError;
+                errors["dueDate"] = DateValidationMessages.DueDateFormat;
             }
         }
 
@@ -176,7 +190,7 @@ public sealed class GoalsService(IUnitOfWork uow) : IGoalsService
                     g.ContainerId,
                     g.Container.Name,
                     g.Container.Color,
-                    g.DueDate?.ToString(DueDateFormat),
+                    g.DueDate?.ToString(DateFormats.Date),
                     saved,
                     ComputeMonthlyRequired(achieved, g.DueDate, g.TargetAmount, saved),
                     achieved,

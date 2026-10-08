@@ -8,15 +8,19 @@ namespace Budget.Application.Infrastructure.Database.Contract;
 public interface IGenericRepository<TEntity>
     where TEntity : class
 {
-    /// <summary>Запрос по сущности (трекинг по умолчанию, как у DbSet).</summary>
+    /// <summary>Запрос сущностей с отслеживанием изменений провайдером по умолчанию.</summary>
     IQueryable<TEntity> Query { get; }
 
-    /// <summary>Добавляет новую сущность.</summary>
+    /// <summary>Добавляет новую сущность для последующего сохранения.</summary>
+    /// <param name="entity">Сущность, которую требуется добавить.</param>
+    /// <param name="token">Токен отмены операции добавления.</param>
     Task AddAsync(TEntity entity, CancellationToken token = default);
 
-    /// <summary>Отмечает сущность как изменённую.</summary>
+    /// <summary>Отмечает сущность для обновления при следующем сохранении.</summary>
+    /// <param name="entity">Сущность с новыми значениями.</param>
     void Update(TEntity entity);
 
-    /// <summary>Отмечает сущность как удалённую.</summary>
+    /// <summary>Отмечает сущность для удаления при следующем сохранении.</summary>
+    /// <param name="entity">Сущность, которую требуется удалить.</param>
     void Remove(TEntity entity);
 }

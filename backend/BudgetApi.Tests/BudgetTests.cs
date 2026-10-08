@@ -3,24 +3,26 @@ using Xunit;
 
 namespace BudgetApi.Tests;
 
+/// <summary>Проверяет HTTP-сценарии месячного бюджета и его позиций.</summary>
 public class BudgetTests : ApiTestBase
 {
     private static (string Key, DateOnly First) LastMonth()
     {
-        var now = DateOnly.FromDateTime(DateTime.Now);
+        var now = Validation.Today();
         var first = new DateOnly(now.Year, now.Month, 1).AddMonths(-1);
-        return (first.ToString("yyyy-MM"), first);
+        return (first.ToString(DateFormats.Month), first);
     }
 
     private static (string Key, DateOnly First) MonthBeforeLast()
     {
         var (key, first) = LastMonth();
         var prev = first.AddMonths(-1);
-        return (prev.ToString("yyyy-MM"), prev);
+        return (prev.ToString(DateFormats.Month), prev);
     }
 
     [Fact]
-    public async Task Create_Valid_Returns201_AndAppearsInGet()
+    /// <summary>Проверяет создание бюджетной позиции и её появление в месячном плане.</summary>
+    public async Task CreateBudgetItem_ValidRequest_Returns201AndAppearsInMonth()
     {
         var (key, _) = LastMonth();
         var categoryId = await GetCategoryIdAsync("Супермаркет", "Продукты");
@@ -46,7 +48,8 @@ public class BudgetTests : ApiTestBase
     }
 
     [Fact]
-    public async Task Create_TwoItemsSameCategorySameMonth_BothAllowed()
+    /// <summary>Проверяет возможность создать несколько позиций для категории в одном месяце.</summary>
+    public async Task CreateBudgetItem_DuplicateCategoryAndMonth_AllowsBothItems()
     {
         var (key, _) = LastMonth();
         var categoryId = await GetCategoryIdAsync("Супермаркет", "Продукты");
@@ -65,7 +68,8 @@ public class BudgetTests : ApiTestBase
     }
 
     [Fact]
-    public async Task Create_WithIncomeCategory_Returns400()
+    /// <summary>Проверяет запрет планирования бюджета по категории доходов.</summary>
+    public async Task CreateBudgetItem_WithIncomeCategory_Returns400()
     {
         var (key, _) = LastMonth();
         var salaryId = await GetCategoryIdAsync("Зарплата");
@@ -73,14 +77,15 @@ public class BudgetTests : ApiTestBase
         var result = await SendAsync(HttpMethod.Post, "/api/budget", new { month = key, categoryId = salaryId, amount = 100 });
 
         Assert.Equal(400, result.Status);
-        Assert.Equal("ValidationFailed", result.GetProperty<string>("code"));
+        Assert.Equal(ApiErrorCodes.ValidationFailed, result.GetProperty<string>("code"));
         TestAsserts.HasError(result, "categoryId");
         Assert.Equal("Бюджет можно планировать только по категориям расходов",
             result.Json.GetProperty("errors").GetProperty("categoryId").GetString());
     }
 
     [Fact]
-    public async Task Create_WithMissingCategory_Returns400()
+    /// <summary>Проверяет отклонение бюджетной позиции с несуществующей категорией.</summary>
+    public async Task CreateBudgetItem_WithMissingCategory_Returns400()
     {
         var (key, _) = LastMonth();
 
@@ -92,10 +97,12 @@ public class BudgetTests : ApiTestBase
     }
 
     [Theory]
-    [InlineData("2026-13")]
+    [InlineData(TestConstants.InvalidMonth)]
     [InlineData("09-2026")]
     [InlineData("")]
-    public async Task Create_WithInvalidMonth_Returns400(string month)
+    /// <summary>Проверяет отклонение бюджетной позиции с некорректным месяцем.</summary>
+    /// <param name="month">Значение месяца в недопустимом формате.</param>
+    public async Task CreateBudgetItem_InvalidMonth_Returns400(string month)
     {
         var categoryId = await GetCategoryIdAsync("Супермаркет", "Продукты");
 
@@ -103,17 +110,18 @@ public class BudgetTests : ApiTestBase
 
         Assert.Equal(400, result.Status);
         TestAsserts.HasError(result, "month");
-        Assert.Equal("Формат месяца: yyyy-MM", result.Json.GetProperty("errors").GetProperty("month").GetString());
+        Assert.Equal(DateValidationMessages.MonthFormat, result.Json.GetProperty("errors").GetProperty("month").GetString());
     }
 
     [Fact]
-    public async Task GetMonth_InvalidOrMissingMonth_Returns400()
+    /// <summary>Проверяет отклонение запроса месяца бюджета при отсутствии или ошибочном значении.</summary>
+    public async Task GetBudgetMonth_MissingOrInvalidMonth_Returns400()
     {
         var missing = await SendAsync(HttpMethod.Get, "/api/budget");
         Assert.Equal(400, missing.Status);
         TestAsserts.HasError(missing, "month");
 
-        var bad = await SendAsync(HttpMethod.Get, "/api/budget?month=2026-13");
+        var bad = await SendAsync(HttpMethod.Get, $"/api/budget?month={TestConstants.InvalidMonth}");
         Assert.Equal(400, bad.Status);
         TestAsserts.HasError(bad, "month");
 
@@ -126,7 +134,9 @@ public class BudgetTests : ApiTestBase
     [InlineData(0)]
     [InlineData(-100)]
     [InlineData(1_000_000_000_000.00)]
-    public async Task Create_WithInvalidAmount_Returns400(decimal amount)
+    /// <summary>Проверяет отклонение бюджетной позиции с недопустимой суммой.</summary>
+    /// <param name="amount">Недопустимое значение суммы позиции.</param>
+    public async Task CreateBudgetItem_InvalidAmount_Returns400(decimal amount)
     {
         var (key, _) = LastMonth();
         var categoryId = await GetCategoryIdAsync("Супермаркет", "Продукты");
@@ -138,31 +148,34 @@ public class BudgetTests : ApiTestBase
     }
 
     [Fact]
-    public async Task Create_WithNoteAbove500Chars_Returns400()
+    /// <summary>Проверяет отклонение бюджетной позиции с чрезмерно длинной заметкой.</summary>
+    public async Task CreateBudgetItem_NoteAboveMaximumLength_Returns400()
     {
         var (key, _) = LastMonth();
         var categoryId = await GetCategoryIdAsync("Супермаркет", "Продукты");
 
-        var result = await SendAsync(HttpMethod.Post, "/api/budget", new { month = key, categoryId, amount = 100, note = new string('а', 501) });
+        var result = await SendAsync(HttpMethod.Post, "/api/budget", new { month = key, categoryId, amount = 100, note = new string('а', Validation.MaxNoteLength + 1) });
 
         Assert.Equal(400, result.Status);
         TestAsserts.HasError(result, "note");
     }
 
     [Fact]
-    public async Task Create_WithoutRequiredFields_Returns400_WithAllMissingFields()
+    /// <summary>Проверяет ошибки для всех обязательных полей при создании пустой бюджетной позиции.</summary>
+    public async Task CreateBudgetItem_WithoutRequiredFields_Returns400WithAllFieldErrors()
     {
         var result = await SendAsync(HttpMethod.Post, "/api/budget", new { });
 
         Assert.Equal(400, result.Status);
-        Assert.Equal("ValidationFailed", result.GetProperty<string>("code"));
+        Assert.Equal(ApiErrorCodes.ValidationFailed, result.GetProperty<string>("code"));
         TestAsserts.HasError(result, "month");
         TestAsserts.HasError(result, "categoryId");
         TestAsserts.HasError(result, "amount");
     }
 
     [Fact]
-    public async Task Update_ChangesFields_UpdatedAtNotBeforeCreatedAt()
+    /// <summary>Проверяет обновление полей позиции и корректность временных меток.</summary>
+    public async Task UpdateBudgetItem_ChangedFields_UpdatesValuesAndTimestamp()
     {
         var (key, _) = LastMonth();
         var foodId = await GetCategoryIdAsync("Супермаркет", "Продукты");
@@ -184,7 +197,8 @@ public class BudgetTests : ApiTestBase
     }
 
     [Fact]
-    public async Task Update_MoveToOtherMonth_ItemMovesBetweenMonths()
+    /// <summary>Проверяет перемещение позиции между месячными бюджетами при обновлении.</summary>
+    public async Task UpdateBudgetItem_ChangedMonth_MovesItemBetweenMonths()
     {
         var (key, _) = LastMonth();
         var (otherKey, _) = MonthBeforeLast();
@@ -205,23 +219,25 @@ public class BudgetTests : ApiTestBase
     }
 
     [Fact]
-    public async Task Update_Delete_NonExistentId_Returns404()
+    /// <summary>Проверяет ответы для обновления и удаления несуществующей бюджетной позиции.</summary>
+    public async Task UpdateOrDeleteBudgetItem_MissingId_Returns404()
     {
         var (key, _) = LastMonth();
         var categoryId = await GetCategoryIdAsync("Супермаркет", "Продукты");
 
         var updated = await SendAsync(HttpMethod.Put, "/api/budget/999999", new { month = key, categoryId, amount = 100 });
         Assert.Equal(404, updated.Status);
-        Assert.Equal("NotFound", updated.GetProperty<string>("code"));
+        Assert.Equal(ApiErrorCodes.NotFound, updated.GetProperty<string>("code"));
         Assert.Equal("Позиция бюджета не найдена", updated.GetProperty<string>("message"));
 
         var deleted = await SendAsync(HttpMethod.Delete, "/api/budget/999999");
         Assert.Equal(404, deleted.Status);
-        Assert.Equal("NotFound", deleted.GetProperty<string>("code"));
+        Assert.Equal(ApiErrorCodes.NotFound, deleted.GetProperty<string>("code"));
     }
 
     [Fact]
-    public async Task Delete_RemovesItem_AndGoneFromGet()
+    /// <summary>Проверяет удаление бюджетной позиции из месячного плана.</summary>
+    public async Task DeleteBudgetItem_ExistingItem_RemovesItFromMonth()
     {
         var (key, _) = LastMonth();
         var categoryId = await GetCategoryIdAsync("Супермаркет", "Продукты");
@@ -237,13 +253,14 @@ public class BudgetTests : ApiTestBase
     }
 
     [Fact]
-    public async Task GetMonth_Totals_AggregateAllUsers_IgnoringIncome()
+    /// <summary>Проверяет агрегирование месячных итогов по всем пользователям без доходов.</summary>
+    public async Task GetBudgetMonth_WithTransactions_AggregatesExpensesAcrossUsers()
     {
         var (key, first) = LastMonth();
         var foodId = await GetCategoryIdAsync("Супермаркет", "Продукты");
         var taxiId = await GetCategoryIdAsync("Такси", "Транспорт");
         var salaryId = await GetCategoryIdAsync("Зарплата");
-        var date = first.AddDays(5).ToString("yyyy-MM-dd");
+        var date = first.AddDays(5).ToString(DateFormats.Date);
 
         var secondUser = await SendAsync(HttpMethod.Post, "/api/users", new { username = "ivan", displayName = "Иван", password = "secret123" });
         Assert.Equal(201, secondUser.Status);
@@ -266,14 +283,15 @@ public class BudgetTests : ApiTestBase
     }
 
     [Fact]
-    public async Task GetMonth_Categories_PlanActualDiffAndFiltering()
+    /// <summary>Проверяет план, факт, разницу и фильтрацию категорий месячного бюджета.</summary>
+    public async Task GetBudgetMonth_WithCategoryActivity_ReturnsPlanActualDiffAndFilteredCategories()
     {
         var (key, first) = LastMonth();
         var foodId = await GetCategoryIdAsync("Супермаркет", "Продукты");
         var taxiId = await GetCategoryIdAsync("Такси", "Транспорт");
         var pharmacyId = await GetCategoryIdAsync("Аптека", "Здоровье");
         var fuelId = await GetCategoryIdAsync("Бензин", "Транспорт");
-        var date = first.AddDays(5).ToString("yyyy-MM-dd");
+        var date = first.AddDays(5).ToString(DateFormats.Date);
 
         await SendAsync(HttpMethod.Post, "/api/budget", new { month = key, categoryId = foodId, amount = 1000 });
         await SendAsync(HttpMethod.Post, "/api/budget", new { month = key, categoryId = pharmacyId, amount = 500 });
@@ -305,7 +323,8 @@ public class BudgetTests : ApiTestBase
     }
 
     [Fact]
-    public async Task GetMonth_ItemsOfOtherMonths_NotIncluded()
+    /// <summary>Проверяет исключение позиций других месяцев из ответа месячного бюджета.</summary>
+    public async Task GetBudgetMonth_WithItemsFromOtherMonths_ExcludesOtherMonthItems()
     {
         var (key, _) = LastMonth();
         var (otherKey, _) = MonthBeforeLast();
@@ -324,6 +343,7 @@ public class BudgetTests : ApiTestBase
     }
 
     [Fact]
+    /// <summary>Проверяет запрет удаления категории, используемой бюджетными позициями.</summary>
     public async Task DeleteCategory_WithBudgetItems_Returns409()
     {
         var (key, _) = LastMonth();
@@ -338,7 +358,7 @@ public class BudgetTests : ApiTestBase
         var result = await SendAsync(HttpMethod.Delete, $"/api/categories/{categoryId}");
 
         Assert.Equal(409, result.Status);
-        Assert.Equal("Conflict", result.GetProperty<string>("code"));
+        Assert.Equal(ApiErrorCodes.Conflict, result.GetProperty<string>("code"));
         Assert.Equal("В категории есть плановые бюджеты — сначала удалите их", result.GetProperty<string>("message"));
     }
 }

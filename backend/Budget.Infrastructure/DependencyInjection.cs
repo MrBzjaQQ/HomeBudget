@@ -20,20 +20,23 @@ public static class DependencyInjection
     /// Добавляет контекст БД, Unit of Work и службы инфраструктуры.
     /// Провайдер БД выбирается конфигурацией Database:Provider (Npgsql по умолчанию / InMemory в тестах).
     /// </summary>
+    /// <param name="services">Коллекция служб, в которую добавляются реализации инфраструктуры.</param>
+    /// <param name="configuration">Конфигурация с провайдером, именем InMemory-базы или строкой подключения.</param>
+    /// <returns>Та же коллекция служб для продолжения настройки.</returns>
     public static IServiceCollection AddDatabase(this IServiceCollection services, IConfiguration configuration)
     {
-        var dbProvider = configuration["Database:Provider"] ?? "Npgsql";
+        var dbProvider = configuration[DatabaseConfiguration.ProviderKey] ?? DatabaseConfiguration.NpgsqlProvider;
 
         services.AddDbContext<BudgetDbContext>(options =>
         {
-            if (dbProvider == "InMemory")
+            if (dbProvider == DatabaseConfiguration.InMemoryProvider)
             {
-                options.UseInMemoryDatabase(configuration["Database:InMemoryName"] ?? "budget-test");
+                options.UseInMemoryDatabase(configuration[DatabaseConfiguration.InMemoryNameKey] ?? "budget-test");
             }
             else
             {
-                var connectionString = configuration.GetConnectionString("Default")
-                    ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured");
+                var connectionString = configuration[DatabaseConfiguration.DefaultConnectionStringKey]
+                    ?? throw new InvalidOperationException($"{DatabaseConfiguration.DefaultConnectionStringKey} is not configured");
                 options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention(CultureInfo.InvariantCulture);
             }
         });
@@ -45,7 +48,9 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>Применяет миграции БД (схема обновляется автоматически при старте API; для нереляционных провайдеров, например InMemory, пропускается).</summary>
+    /// <summary>Применяет миграции к реляционной базе данных; для InMemory-провайдера операция пропускается.</summary>
+    /// <param name="app">Хост, предоставляющий настроенный контейнер служб.</param>
+    /// <returns>Асинхронная операция применения миграций.</returns>
     public static async Task MigrateDatabaseAsync(this IHost app)
     {
         using var scope = app.Services.CreateAsyncScope();
@@ -56,7 +61,9 @@ public static class DependencyInjection
         }
     }
 
-    /// <summary>Заполняет пустую базу стартовыми данными (администратор, категории, счета).</summary>
+    /// <summary>Заполняет базу начальными данными, если соответствующие таблицы ещё пусты.</summary>
+    /// <param name="app">Хост, из контейнера которого извлекаются контекст и сидер.</param>
+    /// <returns>Асинхронная операция заполнения начальных данных.</returns>
     public static async Task SeedDatabaseAsync(this IHost app)
     {
         using var scope = app.Services.CreateAsyncScope();

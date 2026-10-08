@@ -5,21 +5,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Budget.Application.Budget;
 
+/// <summary>Формирует месячный план расходов и управляет его позициями.</summary>
+/// <param name="uow">Рабочая единица доступа к планам, операциям и категориям.</param>
 public sealed class BudgetService(IUnitOfWork uow) : IBudgetService
 {
-    private const string MonthError = "Формат месяца: yyyy-MM";
-
+    /// <summary>Сопоставляет бюджетный план с фактическими расходами за месяц.</summary>
+    /// <param name="month">Месяц в формате yyyy-MM.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Позиции плана, суммы по категориям и общие итоги.</returns>
     public async Task<BudgetMonthResponse> GetMonthAsync(string? month, CancellationToken ct)
     {
         var firstDay = ParseMonth(month);
         if (firstDay is null)
         {
-            throw ApiErrorException.BadRequest(MonthError, new Dictionary<string, string> { ["month"] = MonthError });
+            throw ApiErrorException.BadRequest(DateValidationMessages.MonthFormat, new Dictionary<string, string> { ["month"] = DateValidationMessages.MonthFormat });
         }
 
         var monthStart = firstDay.Value;
         var monthEnd = monthStart.AddMonths(1);
-        var monthKey = monthStart.ToString("yyyy-MM");
+        var monthKey = monthStart.ToString(DateFormats.Month);
 
         var items = await uow.BudgetItems.Query.AsNoTracking()
             .Include(x => x.Category)
@@ -73,6 +77,10 @@ public sealed class BudgetService(IUnitOfWork uow) : IBudgetService
         return new BudgetMonthResponse(monthKey, items, rows, totals);
     }
 
+    /// <summary>Проверяет и сохраняет новую плановую позицию.</summary>
+    /// <param name="request">Месяц, категория, сумма и комментарий.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Представление созданной позиции.</returns>
     public async Task<BudgetItemDto> CreateAsync(CreateBudgetItemRequest request, CancellationToken ct)
     {
         var errors = new Dictionary<string, string>();
@@ -99,6 +107,11 @@ public sealed class BudgetService(IUnitOfWork uow) : IBudgetService
         return await GetDtoAsync(item.Id, ct);
     }
 
+    /// <summary>Проверяет и обновляет существующую плановую позицию.</summary>
+    /// <param name="id">Идентификатор изменяемой позиции.</param>
+    /// <param name="request">Новые значения позиции бюджета.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Обновлённое представление позиции.</returns>
     public async Task<BudgetItemDto> UpdateAsync(long id, CreateBudgetItemRequest request, CancellationToken ct)
     {
         var item = await uow.BudgetItems.Query.FirstOrDefaultAsync(x => x.Id == id, ct)
@@ -120,6 +133,9 @@ public sealed class BudgetService(IUnitOfWork uow) : IBudgetService
         return await GetDtoAsync(item.Id, ct);
     }
 
+    /// <summary>Удаляет плановую позицию по её идентификатору.</summary>
+    /// <param name="id">Идентификатор удаляемой позиции.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
     public async Task DeleteAsync(long id, CancellationToken ct)
     {
         var item = await uow.BudgetItems.Query.FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -140,14 +156,14 @@ public sealed class BudgetService(IUnitOfWork uow) : IBudgetService
         DateOnly? month = null;
         if (string.IsNullOrWhiteSpace(request.Month))
         {
-            errors["month"] = MonthError;
+            errors["month"] = DateValidationMessages.MonthFormat;
         }
         else
         {
             var parsed = ParseMonth(request.Month);
             if (parsed is null)
             {
-                errors["month"] = MonthError;
+                errors["month"] = DateValidationMessages.MonthFormat;
             }
             else
             {
@@ -235,7 +251,7 @@ public sealed class BudgetService(IUnitOfWork uow) : IBudgetService
             .ThenInclude(c => c!.Parent)
             .FirstAsync(x => x.Id == id, ct);
         return new BudgetItemDto(
-            item.Id, item.Month.ToString("yyyy-MM"), item.CategoryId,
+            item.Id, item.Month.ToString(DateFormats.Month), item.CategoryId,
             item.Category.Name, item.Category.Parent?.Name, item.Category.Color,
             item.Amount, item.Note, item.CreatedAt, item.UpdatedAt);
     }

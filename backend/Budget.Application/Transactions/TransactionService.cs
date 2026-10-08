@@ -5,8 +5,23 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Budget.Application.Transactions;
 
+/// <summary>Реализует журнал операций, сводки и проверенные CRUD-операции.</summary>
+/// <param name="uow">Рабочая единица доступа к операциям и справочникам.</param>
 public sealed class TransactionService(IUnitOfWork uow) : ITransactionService
 {
+    /// <summary>Фильтрует и сортирует операции, возвращая страницу с итоговыми суммами.</summary>
+    /// <param name="from">Нижняя включительная дата отбора.</param>
+    /// <param name="to">Верхняя включительная дата отбора.</param>
+    /// <param name="userId">Идентификатор пользователя для отбора.</param>
+    /// <param name="categoryIds">Идентификаторы выбранных категорий.</param>
+    /// <param name="kind">Направление операции для отбора.</param>
+    /// <param name="q">Строка поиска по комментарию.</param>
+    /// <param name="page">Номер страницы.</param>
+    /// <param name="pageSize">Размер страницы.</param>
+    /// <param name="sort">Поле сортировки.</param>
+    /// <param name="dir">Направление сортировки.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Страница операций, количество результатов и итоговые суммы.</returns>
     public async Task<TransactionListResponse> ListAsync(
         DateOnly? from,
         DateOnly? to,
@@ -71,6 +86,10 @@ public sealed class TransactionService(IUnitOfWork uow) : ITransactionService
         return new TransactionListResponse(items, total, page, pageSize, new TotalsDto(income, expense, income - expense));
     }
 
+    /// <summary>Возвращает операцию по идентификатору или сообщает об отсутствии.</summary>
+    /// <param name="id">Идентификатор операции.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>DTO найденной операции.</returns>
     public async Task<TransactionDto> GetAsync(long id, CancellationToken ct)
     {
         var exists = await uow.Transactions.Query.AnyAsync(t => t.Id == id, ct);
@@ -82,6 +101,12 @@ public sealed class TransactionService(IUnitOfWork uow) : ITransactionService
         return await GetDtoAsync(id, ct);
     }
 
+    /// <summary>Группирует операции по месяцу или категории и рассчитывает суммы.</summary>
+    /// <param name="from">Начальная дата периода, включительно.</param>
+    /// <param name="to">Конечная дата периода, включительно.</param>
+    /// <param name="groupBy">Ключ группировки category или month.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Сводка с выбранным типом строк.</returns>
     public async Task<SummaryResponse> SummaryAsync(DateOnly? from, DateOnly? to, string? groupBy, CancellationToken ct)
     {
         if (groupBy is not null
@@ -141,6 +166,11 @@ public sealed class TransactionService(IUnitOfWork uow) : ITransactionService
         return new SummaryResponse(group, rows);
     }
 
+    /// <summary>Проверяет поля и создаёт новую финансовую операцию.</summary>
+    /// <param name="request">Данные создаваемой операции.</param>
+    /// <param name="currentUserId">Идентификатор пользователя, выполняющего запрос.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>DTO созданной операции.</returns>
     public async Task<TransactionDto> CreateAsync(CreateTransactionRequest request, int currentUserId, CancellationToken ct)
     {
         var errors = new Dictionary<string, string>();
@@ -169,6 +199,12 @@ public sealed class TransactionService(IUnitOfWork uow) : ITransactionService
         return await GetDtoAsync(transaction.Id, ct);
     }
 
+    /// <summary>Проверяет данные и изменяет существующую операцию.</summary>
+    /// <param name="id">Идентификатор операции.</param>
+    /// <param name="request">Новые значения операции.</param>
+    /// <param name="currentUserId">Идентификатор пользователя, выполняющего запрос.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>DTO обновлённой операции.</returns>
     public async Task<TransactionDto> UpdateAsync(long id, CreateTransactionRequest request, int currentUserId, CancellationToken ct)
     {
         var transaction = await uow.Transactions.Query.FirstOrDefaultAsync(t => t.Id == id, ct)
@@ -192,6 +228,9 @@ public sealed class TransactionService(IUnitOfWork uow) : ITransactionService
         return await GetDtoAsync(transaction.Id, ct);
     }
 
+    /// <summary>Удаляет существующую операцию.</summary>
+    /// <param name="id">Идентификатор операции.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
     public async Task DeleteAsync(long id, CancellationToken ct)
     {
         var transaction = await uow.Transactions.Query.FirstOrDefaultAsync(t => t.Id == id, ct);

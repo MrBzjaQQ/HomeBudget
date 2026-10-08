@@ -13,6 +13,9 @@ namespace Budget.Application;
 /// <summary>Регистрация сервисов бизнес-логики слоя Application.</summary>
 public static class DependencyInjection
 {
+    /// <summary>Регистрирует прикладные сервисы с областью жизни на один запрос.</summary>
+    /// <param name="services">Коллекция зависимостей приложения.</param>
+    /// <returns>Та же коллекция для продолжения настройки контейнера.</returns>
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddScoped<IAuthService, AuthService>();

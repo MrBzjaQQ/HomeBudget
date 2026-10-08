@@ -1,18 +1,25 @@
 ﻿using Budget.Application.Security;
+using Budget.Application.Common;
 using Budget.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Budget.Infrastructure.Data;
 
+/// <summary>Добавляет в пустые разделы базы начальные учётные данные и справочники.</summary>
+/// <param name="passwordHasher">Служба хеширования пароля начальной учётной записи.</param>
 public sealed class DbSeeder(IPasswordHasher passwordHasher)
 {
+    /// <summary>Создаёт начального администратора, категории и контейнеры накоплений при их отсутствии.</summary>
+    /// <param name="db">Контекст целевой базы данных.</param>
+    /// <param name="ct">Токен отмены чтения и сохранения данных.</param>
+    /// <returns>Асинхронная операция проверки и заполнения базы.</returns>
     public async Task SeedAsync(BudgetDbContext db, CancellationToken ct = default)
     {
         if (!await db.Users.AnyAsync(ct))
         {
             db.Users.Add(new User
             {
-                Username = "admin",
+                Username = SystemUsernames.Admin,
                 DisplayName = "Админ",
                 PasswordHash = passwordHasher.Hash("admin123"),
                 IsActive = true,

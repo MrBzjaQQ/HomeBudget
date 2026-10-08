@@ -2,13 +2,21 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace BudgetApi.Common;
 
-/// <summary>Maps raw model-binding messages to the friendly Russian unified error envelope.</summary>
+/// <summary>Преобразует сообщения привязки модели в дружелюбные русские ошибки API.</summary>
 public static class ModelStateSanitizer
 {
+    /// <summary>Общее сообщение для ошибок входных данных без более точного пояснения.</summary>
     public const string GenericMessage = "Некорректные данные";
+
+    /// <summary>Сообщение о некорректном формате тела запроса.</summary>
     public const string MalformedBodyMessage = "Некорректные данные запроса";
+
+    /// <summary>Сообщение об отсутствующем теле запроса.</summary>
     public const string EmptyBodyMessage = "Пустое тело запроса";
 
+    /// <summary>Формирует русское общее сообщение и, при наличии, ошибки отдельных полей.</summary>
+    /// <param name="modelState">Ошибки привязки и проверки входной модели запроса.</param>
+    /// <returns>Сообщение ответа и словарь ошибок полей либо <see langword="null"/>.</returns>
     public static (string Message, Dictionary<string, string>? Errors) Sanitize(ModelStateDictionary modelState)
     {
         var errors = new Dictionary<string, string>();

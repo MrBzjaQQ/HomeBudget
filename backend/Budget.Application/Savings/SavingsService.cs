@@ -5,12 +5,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Budget.Application.Savings;
 
+/// <summary>Ведёт счета и ежемесячные записи семейных накоплений.</summary>
+/// <param name="uow">Рабочая единица доступа к счетам, записям и пользователям.</param>
 public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
 {
-    private const string AdminUsername = "admin";
-
-    private const string MonthError = "Формат месяца: yyyy-MM";
-
+    /// <summary>Возвращает все счета накоплений в порядке отображения.</summary>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Представления счетов накоплений.</returns>
     public async Task<IReadOnlyList<SavingsContainerDto>> ListContainersAsync(CancellationToken ct)
     {
         var containers = await uow.SavingsContainers.Query.AsNoTracking()
@@ -22,6 +23,10 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         return containers;
     }
 
+    /// <summary>Проверяет и создаёт общий счёт накоплений.</summary>
+    /// <param name="request">Название, цвет и порядок нового счёта.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Созданное представление счёта.</returns>
     public async Task<SavingsContainerDto> CreateContainerAsync(CreateSavingsContainerRequest request, CancellationToken ct)
     {
         var name = request.Name?.Trim();
@@ -30,7 +35,7 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         {
             errors["name"] = "Название не может быть пустым";
         }
-        else if (name.Length > 100)
+        else if (name.Length > Validation.MaxNameLength)
         {
             errors["name"] = "Название не длиннее 100 символов";
         }
@@ -63,6 +68,11 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         return await GetContainerDtoAsync(container.Id, ct);
     }
 
+    /// <summary>Применяет изменения к счёту накоплений.</summary>
+    /// <param name="id">Идентификатор счёта.</param>
+    /// <param name="request">Изменённые свойства счёта.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Обновлённое представление счёта.</returns>
     public async Task<SavingsContainerDto> UpdateContainerAsync(int id, UpdateSavingsContainerRequest request, CancellationToken ct)
     {
         var container = await uow.SavingsContainers.Query.FirstOrDefaultAsync(c => c.Id == id, ct)
@@ -76,7 +86,7 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
             {
                 errors["name"] = "Название не может быть пустым";
             }
-            else if (name.Length > 100)
+            else if (name.Length > Validation.MaxNameLength)
             {
                 errors["name"] = "Название не длиннее 100 символов";
             }
@@ -121,6 +131,9 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         return await GetContainerDtoAsync(container.Id, ct);
     }
 
+    /// <summary>Удаляет пустой счёт, не связанный с записями или целями.</summary>
+    /// <param name="id">Идентификатор счёта.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
     public async Task DeleteContainerAsync(int id, CancellationToken ct)
     {
         var container = await uow.SavingsContainers.Query.FirstOrDefaultAsync(c => c.Id == id, ct)
@@ -140,16 +153,20 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         await uow.SaveChangesAsync(ct);
     }
 
+    /// <summary>Возвращает записи и сумму накоплений за выбранный месяц.</summary>
+    /// <param name="month">Месяц в формате yyyy-MM.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Ответ со списком записей месяца и их общей суммой.</returns>
     public async Task<SavingsMonthResponse> GetMonthAsync(string? month, CancellationToken ct)
     {
         var firstDay = ParseMonth(month);
         if (firstDay is null)
         {
-            throw ApiErrorException.BadRequest(MonthError, new Dictionary<string, string> { ["month"] = MonthError });
+            throw ApiErrorException.BadRequest(DateValidationMessages.MonthFormat, new Dictionary<string, string> { ["month"] = DateValidationMessages.MonthFormat });
         }
 
         var monthStart = firstDay.Value;
-        var monthKey = monthStart.ToString("yyyy-MM");
+        var monthKey = monthStart.ToString(DateFormats.Month);
 
         var entries = await uow.SavingsEntries.Query.AsNoTracking()
             .Include(x => x.Container)
@@ -171,6 +188,11 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         return new SavingsMonthResponse(monthKey, dtos, entries.Sum(x => x.Amount));
     }
 
+    /// <summary>Проверяет и создаёт ежемесячную запись накоплений участника.</summary>
+    /// <param name="request">Месяц, участник, счёт, сумма и комментарий.</param>
+    /// <param name="currentUserId">Идентификатор пользователя, выполняющего запрос.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Представление созданной записи.</returns>
     public async Task<SavingsEntryDto> CreateEntryAsync(CreateSavingsEntryRequest request, int currentUserId, CancellationToken ct)
     {
         var errors = new Dictionary<string, string>();
@@ -203,6 +225,12 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         return await GetEntryDtoAsync(entry.Id, ct);
     }
 
+    /// <summary>Проверяет и обновляет запись накоплений.</summary>
+    /// <param name="id">Идентификатор записи.</param>
+    /// <param name="request">Поля записи, которые следует изменить.</param>
+    /// <param name="currentUserId">Идентификатор пользователя, выполняющего запрос.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Обновлённое представление записи.</returns>
     public async Task<SavingsEntryDto> UpdateEntryAsync(long id, UpdateSavingsEntryRequest request, int currentUserId, CancellationToken ct)
     {
         var entry = await uow.SavingsEntries.Query.FirstOrDefaultAsync(x => x.Id == id, ct)
@@ -230,6 +258,9 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         return await GetEntryDtoAsync(entry.Id, ct);
     }
 
+    /// <summary>Удаляет запись накоплений по её идентификатору.</summary>
+    /// <param name="id">Идентификатор удаляемой записи.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
     public async Task DeleteEntryAsync(long id, CancellationToken ct)
     {
         var entry = await uow.SavingsEntries.Query.FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -242,6 +273,10 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         await uow.SaveChangesAsync(ct);
     }
 
+    /// <summary>Рассчитывает динамику накоплений за последовательное окно месяцев.</summary>
+    /// <param name="to">Последний месяц сводки в формате yyyy-MM; по умолчанию текущий месяц.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Сводка по месяцам и участникам без системного администратора.</returns>
     public async Task<SavingsSummary> SummaryAsync(string? to, CancellationToken ct)
     {
         var today = Validation.Today();
@@ -250,15 +285,15 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         if (!string.IsNullOrWhiteSpace(to))
         {
             requestedEnd = ParseMonth(to)
-                ?? throw ApiErrorException.BadRequest(MonthError, new Dictionary<string, string> { ["to"] = MonthError });
+                ?? throw ApiErrorException.BadRequest(DateValidationMessages.MonthFormat, new Dictionary<string, string> { ["to"] = DateValidationMessages.MonthFormat });
         }
 
         var windowEnd = requestedEnd < currentMonth ? requestedEnd : currentMonth;
-        var windowStart = windowEnd.AddMonths(-11);
+        var windowStart = windowEnd.AddMonths(-(SavingsConstants.SummaryMonthCount - 1));
         var beforeWindow = windowStart.AddMonths(-1);
 
         var entries = await uow.SavingsEntries.Query.AsNoTracking()
-            .Where(x => x.Month >= windowStart && x.Month <= windowEnd && x.User.Username != AdminUsername)
+            .Where(x => x.Month >= windowStart && x.Month <= windowEnd && x.User.Username != SystemUsernames.Admin)
             .Select(x => new { x.Month, x.UserId, UserName = x.User.DisplayName, x.Amount })
             .ToListAsync(ct);
 
@@ -267,19 +302,19 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
             .ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
 
         var beforeWindowTotal = await uow.SavingsEntries.Query.AsNoTracking()
-            .Where(x => x.Month == beforeWindow && x.User.Username != AdminUsername)
+            .Where(x => x.Month == beforeWindow && x.User.Username != SystemUsernames.Admin)
             .Select(x => x.Amount)
             .SumAsync(ct);
 
-        var months = new List<SavingsMonthAmount>(12);
-        var deltas = new List<SavingsMonthDelta>(12);
-        for (var m = 0; m < 12; m++)
+        var months = new List<SavingsMonthAmount>(SavingsConstants.SummaryMonthCount);
+        var deltas = new List<SavingsMonthDelta>(SavingsConstants.SummaryMonthCount);
+        for (var m = 0; m < SavingsConstants.SummaryMonthCount; m++)
         {
             var monthKey = windowStart.AddMonths(m);
             var amount = amountsByMonth.GetValueOrDefault(monthKey, 0m);
             var previousAmount = m == 0 ? beforeWindowTotal : amountsByMonth.GetValueOrDefault(monthKey.AddMonths(-1), 0m);
-            months.Add(new SavingsMonthAmount(monthKey.ToString("yyyy-MM"), amount));
-            deltas.Add(new SavingsMonthDelta(monthKey.ToString("yyyy-MM"), amount - previousAmount));
+            months.Add(new SavingsMonthAmount(monthKey.ToString(DateFormats.Month), amount));
+            deltas.Add(new SavingsMonthDelta(monthKey.ToString(DateFormats.Month), amount - previousAmount));
         }
 
         var byMember = entries
@@ -289,7 +324,7 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
             .ThenBy(x => x.UserName)
             .ToList();
 
-        return new SavingsSummary(windowEnd.ToString("yyyy-MM"), months, deltas, byMember, byMember.Sum(x => x.Amount));
+        return new SavingsSummary(windowEnd.ToString(DateFormats.Month), months, deltas, byMember, byMember.Sum(x => x.Amount));
     }
 
     private sealed record ValidatedSavingsEntry(DateOnly Month, int UserId, int ContainerId, decimal Amount, string? Note);
@@ -304,7 +339,7 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
             var parsed = ParseMonth(month);
             if (parsed is null)
             {
-                errors["month"] = MonthError;
+                errors["month"] = DateValidationMessages.MonthFormat;
             }
             else
             {
@@ -313,7 +348,7 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
         }
         else if (existing is null)
         {
-            errors["month"] = MonthError;
+            errors["month"] = DateValidationMessages.MonthFormat;
         }
 
         int? entryUserId = existing?.UserId;
@@ -324,7 +359,7 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
             {
                 errors["userId"] = "Пользователь не найден";
             }
-            else if (target.Username == AdminUsername)
+            else if (target.Username == SystemUsernames.Admin)
             {
                 errors["userId"] = "Админ не участвует в накоплениях";
             }
@@ -427,7 +462,7 @@ public sealed class SavingsService(IUnitOfWork uow) : ISavingsService
             .Include(x => x.User)
             .FirstAsync(x => x.Id == id, ct);
         return new SavingsEntryDto(
-            entry.Id, entry.Month.ToString("yyyy-MM"),
+            entry.Id, entry.Month.ToString(DateFormats.Month),
             entry.UserId, entry.User.DisplayName,
             entry.ContainerId, entry.Container.Name, entry.Container.Color,
             entry.Amount, entry.Note, entry.CreatedAt, entry.UpdatedAt);

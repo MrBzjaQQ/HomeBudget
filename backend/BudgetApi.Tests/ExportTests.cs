@@ -5,6 +5,7 @@ using Xunit;
 
 namespace BudgetApi.Tests;
 
+/// <summary>Проверяет структуру и содержимое месячных и годовых Excel-отчётов.</summary>
 public class ExportTests
 {
     private static readonly int Year = 2026;
@@ -22,7 +23,8 @@ public class ExportTests
     };
 
     [Fact]
-    public void YearFile_Has13Sheets_12MonthsPlusSummary()
+    /// <summary>Проверяет наличие двенадцати месячных листов и листа сводки в годовом файле.</summary>
+    public void BuildYearFile_WithAllMonths_CreatesMonthlySheetsAndSummary()
     {
         var bytes = new ExcelExportService().BuildYearFile(SampleData(), Year);
         using var workbook = new XLWorkbook(new MemoryStream(bytes));
@@ -35,7 +37,8 @@ public class ExportTests
     }
 
     [Fact]
-    public void YearFile_EmptyMonth_HasHeaderAndZeroTotals()
+    /// <summary>Проверяет заголовки и итоги пустого месяца в годовом файле.</summary>
+    public void BuildYearFile_WithEmptyMonth_CreatesHeaderAndZeroTotals()
     {
         var bytes = new ExcelExportService().BuildYearFile(SampleData(), Year);
         using var workbook = new XLWorkbook(new MemoryStream(bytes));
@@ -52,7 +55,8 @@ public class ExportTests
     }
 
     [Fact]
-    public void YearFile_MonthSheet_ContainsRowsAndTotals()
+    /// <summary>Проверяет строки и итоги месячного листа годового файла.</summary>
+    public void BuildYearFile_WithMonthlyTransactions_IncludesRowsAndTotals()
     {
         var bytes = new ExcelExportService().BuildYearFile(SampleData(), Year);
         using var workbook = new XLWorkbook(new MemoryStream(bytes));
@@ -82,7 +86,8 @@ public class ExportTests
     }
 
     [Fact]
-    public void YearFile_SummarySheet_Has12RowsAndCumulative()
+    /// <summary>Проверяет месячные строки и накопительные итоги листа годовой сводки.</summary>
+    public void BuildYearFile_WithTransactions_IncludesMonthlyAndCumulativeSummary()
     {
         var bytes = new ExcelExportService().BuildYearFile(SampleData(), Year);
         using var workbook = new XLWorkbook(new MemoryStream(bytes));
@@ -117,7 +122,8 @@ public class ExportTests
     }
 
     [Fact]
-    public void MonthFile_SingleSheet_WithCategoryBreakdown()
+    /// <summary>Проверяет единственный лист и детализацию расходов по категориям в месячном файле.</summary>
+    public void BuildMonthFile_WithExpenses_CreatesSheetAndCategoryBreakdown()
     {
         var bytes = new ExcelExportService().BuildMonthFile(SampleData(), Year, 1);
         using var workbook = new XLWorkbook(new MemoryStream(bytes));
@@ -140,7 +146,8 @@ public class ExportTests
     }
 
     [Fact]
-    public void MonthFile_WhoLabel_ShowsSpecificUser()
+    /// <summary>Проверяет отображение выбранного пользователя в месячном файле.</summary>
+    public void BuildMonthFile_WithSpecificUser_ShowsUserLabel()
     {
         var data = new ExportData { WhoLabel = "Иван", Rows = SampleData().Rows.Where(r => r.UserName == "Иван").ToList() };
         var bytes = new ExcelExportService().BuildMonthFile(data, Year, 1);
@@ -152,7 +159,8 @@ public class ExportTests
     }
 
     [Fact]
-    public void MonthFile_FreezePanes_AfterHeader()
+    /// <summary>Проверяет закрепление строк заголовка в месячном файле.</summary>
+    public void BuildMonthFile_WithTransactions_FreezesPanesAfterHeader()
     {
         var bytes = new ExcelExportService().BuildMonthFile(SampleData(), Year, 1);
         using var workbook = new XLWorkbook(new MemoryStream(bytes));
@@ -162,7 +170,8 @@ public class ExportTests
     }
 
     [Fact]
-    public void MonthFile_EmptyMonth_StillHasLayout()
+    /// <summary>Проверяет сохранение структуры листа месячного файла без операций.</summary>
+    public void BuildMonthFile_WithoutTransactions_PreservesWorksheetLayout()
     {
         var data = new ExportData { WhoLabel = "вся семья", Rows = new List<ExportTransactionRow>() };
         var bytes = new ExcelExportService().BuildMonthFile(data, Year, 6);

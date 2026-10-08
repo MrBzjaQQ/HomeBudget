@@ -6,8 +6,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Budget.Application.Users;
 
+/// <summary>Реализует создание, просмотр и изменение учётных записей.</summary>
+/// <param name="uow">Рабочая единица доступа к данным пользователей.</param>
+/// <param name="passwordHasher">Компонент создания хеша пароля.</param>
 public sealed class UserService(IUnitOfWork uow, IPasswordHasher passwordHasher) : IUserService
 {
+    /// <summary>Возвращает всех пользователей в порядке идентификаторов.</summary>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Список публичных DTO пользователей.</returns>
     public async Task<IReadOnlyList<UserDto>> ListAsync(CancellationToken ct)
     {
         var users = await uow.Users.Query.AsNoTracking()
@@ -17,6 +23,10 @@ public sealed class UserService(IUnitOfWork uow, IPasswordHasher passwordHasher)
         return users;
     }
 
+    /// <summary>Проверяет поля, хеширует пароль и создаёт активного пользователя.</summary>
+    /// <param name="request">Запрос с логином, именем и паролем.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Публичное представление созданной учётной записи.</returns>
     public async Task<UserDto> CreateAsync(CreateUserRequest request, CancellationToken ct)
     {
         var username = request.Username?.Trim();
@@ -27,7 +37,7 @@ public sealed class UserService(IUnitOfWork uow, IPasswordHasher passwordHasher)
         {
             errors["username"] = "Введите логин";
         }
-        else if (username.Length > 50)
+        else if (username.Length > Validation.MaxUsernameLength)
         {
             errors["username"] = "Логин не длиннее 50 символов";
         }
@@ -40,7 +50,7 @@ public sealed class UserService(IUnitOfWork uow, IPasswordHasher passwordHasher)
         {
             errors["displayName"] = "Введите отображаемое имя";
         }
-        else if (displayName.Length > 100)
+        else if (displayName.Length > Validation.MaxNameLength)
         {
             errors["displayName"] = "Имя не длиннее 100 символов";
         }
@@ -69,6 +79,11 @@ public sealed class UserService(IUnitOfWork uow, IPasswordHasher passwordHasher)
         return UserDtos.ToDto(user);
     }
 
+    /// <summary>Применяет заданные изменения к существующей учётной записи.</summary>
+    /// <param name="id">Идентификатор изменяемого пользователя.</param>
+    /// <param name="request">Новые значения отображаемого имени, пароля или активности.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Обновлённое публичное представление учётной записи.</returns>
     public async Task<UserDto> UpdateAsync(int id, UpdateUserRequest request, CancellationToken ct)
     {
         var user = await uow.Users.Query.FirstOrDefaultAsync(u => u.Id == id, ct)
@@ -83,7 +98,7 @@ public sealed class UserService(IUnitOfWork uow, IPasswordHasher passwordHasher)
             {
                 errors["displayName"] = "Имя не может быть пустым";
             }
-            else if (displayName.Length > 100)
+            else if (displayName.Length > Validation.MaxNameLength)
             {
                 errors["displayName"] = "Имя не длиннее 100 символов";
             }

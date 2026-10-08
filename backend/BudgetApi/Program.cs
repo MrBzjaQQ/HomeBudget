@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Budget.Application;
+using Budget.Application.Common;
 using BudgetApi.Auth;
 using BudgetApi.Common;
 using Budget.Infrastructure;
@@ -38,7 +39,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
         var (message, errors) = ModelStateSanitizer.Sanitize(context.ModelState);
         var payload = new ApiError
         {
-            Code = "ValidationFailed",
+            Code = ApiErrorCodes.ValidationFailed,
             Message = message,
             Errors = errors,
         };
@@ -85,7 +86,7 @@ builder.Services
                 context.HandleResponse();
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 context.Response.ContentType = "application/json; charset=utf-8";
-                return context.Response.WriteAsync("{\"code\":\"Unauthorized\",\"message\":\"Требуется авторизация\"}");
+                return context.Response.WriteAsync($"{{\"code\":\"{ApiErrorCodes.Unauthorized}\",\"message\":\"Требуется авторизация\"}}");
             },
         };
     });
@@ -99,7 +100,7 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
 
 var app = builder.Build();
 
-if (!app.Environment.IsEnvironment("Testing"))
+if (!app.Environment.IsEnvironment(ApiEnvironments.Testing))
 {
     await app.MigrateDatabaseAsync();
     await app.SeedDatabaseAsync();
@@ -141,7 +142,7 @@ app.MapFallback(async context =>
     {
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         context.Response.ContentType = "application/json; charset=utf-8";
-        await context.Response.WriteAsync("{\"code\":\"NotFound\",\"message\":\"Не найдено\"}");
+        await context.Response.WriteAsync($"{{\"code\":\"{ApiErrorCodes.NotFound}\",\"message\":\"Не найдено\"}}");
         return;
     }
 
@@ -162,9 +163,14 @@ app.MapFallback(async context =>
 
 app.Run();
 
+/// <summary>Точка входа веб-приложения, доступная тестовой фабрике хоста.</summary>
 public partial class Program;
 
+/// <summary>Преобразует имена перечислений в JSON в верхний регистр.</summary>
 public sealed class UpperCaseNamingPolicy : System.Text.Json.JsonNamingPolicy
 {
+    /// <summary>Возвращает заданное имя без изменения регистра букв.</summary>
+    /// <param name="name">Имя значения перечисления до преобразования.</param>
+    /// <returns>Имя в верхнем регистре.</returns>
     public override string ConvertName(string name) => name.ToUpperInvariant();
 }

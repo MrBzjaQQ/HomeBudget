@@ -4,11 +4,16 @@ using Microsoft.AspNetCore.Http;
 
 namespace BudgetApi.Common;
 
-/// <summary>Maps <see cref="ApiErrorException"/> to the unified JSON error format.</summary>
+/// <summary>Преобразует исключения API в унифицированный JSON-ответ с подходящим HTTP-статусом.</summary>
+/// <param name="next">Следующий компонент конвейера обработки HTTP-запроса.</param>
 public sealed class ExceptionHandlingMiddleware(RequestDelegate next)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>Выполняет следующий компонент и преобразует необработанные ошибки в ответ API.</summary>
+    /// <param name="context">Контекст текущего HTTP-запроса и формируемого ответа.</param>
+    /// <param name="logger">Журнал для регистрации непредвиденных исключений.</param>
+    /// <returns>Асинхронная операция обработки запроса.</returns>
     public async Task InvokeAsync(HttpContext context, ILogger<ExceptionHandlingMiddleware> logger)
     {
         try
@@ -37,7 +42,7 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next)
 
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             context.Response.ContentType = "application/json; charset=utf-8";
-            var payload = new ApiError { Code = "InternalServerError", Message = "Внутренняя ошибка сервера" };
+            var payload = new ApiError { Code = ApiErrorCodes.InternalServerError, Message = "Внутренняя ошибка сервера" };
             await context.Response.WriteAsync(JsonSerializer.Serialize(payload, JsonOptions));
         }
     }

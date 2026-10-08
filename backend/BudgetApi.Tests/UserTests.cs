@@ -2,12 +2,14 @@ using Xunit;
 
 namespace BudgetApi.Tests;
 
+/// <summary>Проверяет HTTP-сценарии управления пользователями.</summary>
 public class UserTests : ApiTestBase
 {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+    private static DateOnly Today => Validation.Today();
 
     [Fact]
-    public async Task Create_NewUser_CanLoginImmediately()
+    /// <summary>Проверяет возможность входа сразу после создания пользователя.</summary>
+    public async Task CreateUser_ValidRequest_AllowsImmediateLogin()
     {
         var created = await SendAsync(HttpMethod.Post, "/api/users", new { username = "ivan", displayName = "Иван", password = "secret1" });
         Assert.Equal(201, created.Status);
@@ -18,22 +20,24 @@ public class UserTests : ApiTestBase
     }
 
     [Fact]
-    public async Task Create_DuplicateUsername_Returns409()
+    /// <summary>Проверяет ошибку валидации при создании пользователя с занятым логином.</summary>
+    public async Task CreateUser_DuplicateUsername_Returns400()
     {
-        var result = await SendAsync(HttpMethod.Post, "/api/users", new { username = "admin", displayName = "Дубликат", password = "secret1" });
+        var result = await SendAsync(HttpMethod.Post, "/api/users", new { username = SystemUsernames.Admin, displayName = "Дубликат", password = "secret1" });
 
         Assert.Equal(400, result.Status);
         TestAsserts.HasError(result, "username");
     }
 
     [Fact]
-    public async Task DeactivatedUser_KeepsHistory_AttributionVisible()
+    /// <summary>Проверяет сохранение видимой атрибуции истории после деактивации пользователя.</summary>
+    public async Task DeactivateUser_WithExistingTransactions_KeepsHistoryAttributionVisible()
     {
         var created = await SendAsync(HttpMethod.Post, "/api/users", new { username = "maria", displayName = "Мария", password = "secret1" });
         var userId = created.Json.GetProperty("id").GetInt32();
 
         var foodId = await GetCategoryIdAsync("Продукты");
-        string dateStr = Today.ToString("yyyy-MM-dd");
+        string dateStr = Today.ToString(DateFormats.Date);
         var txn = await SendAsync(HttpMethod.Post, "/api/transactions", new { kind = "EXPENSE", amount = 42, date = dateStr, categoryId = foodId, userId });
         Assert.Equal(201, txn.Status);
         Assert.Equal("Мария", txn.Json.GetProperty("userDisplayName").GetString());
@@ -54,7 +58,8 @@ public class UserTests : ApiTestBase
     }
 
     [Fact]
-    public async Task Update_RenamesUser()
+    /// <summary>Проверяет изменение отображаемого имени пользователя.</summary>
+    public async Task UpdateUser_WithNewDisplayName_ReturnsUpdatedUser()
     {
         var created = await SendAsync(HttpMethod.Post, "/api/users", new { username = "petr", displayName = "Петр", password = "secret1" });
         var userId = created.Json.GetProperty("id").GetInt32();

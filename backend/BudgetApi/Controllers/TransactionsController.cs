@@ -8,11 +8,26 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace BudgetApi.Controllers;
 
+/// <summary>Обрабатывает HTTP-запросы для журнала финансовых операций.</summary>
+/// <param name="transactions">Сервис прикладных операций с доходами и расходами.</param>
 [ApiController]
 [Route("api/transactions")]
 [Authorize]
 public class TransactionsController(ITransactionService transactions) : ControllerBase
 {
+    /// <summary>Возвращает страницу операций с заданными фильтрами и сортировкой.</summary>
+    /// <param name="from">Необязательная нижняя граница даты включительно.</param>
+    /// <param name="to">Необязательная верхняя граница даты включительно.</param>
+    /// <param name="userId">Необязательный идентификатор пользователя для фильтрации.</param>
+    /// <param name="categoryId">Необязательный список идентификаторов категорий.</param>
+    /// <param name="kind">Необязательный тип операций: доход или расход.</param>
+    /// <param name="q">Необязательная поисковая строка.</param>
+    /// <param name="page">Номер страницы, начиная с единицы.</param>
+    /// <param name="pageSize">Максимальное число элементов на странице.</param>
+    /// <param name="sort">Необязательное поле сортировки.</param>
+    /// <param name="dir">Необязательное направление сортировки.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Страница операций и сведения о пагинации.</returns>
     [HttpGet]
     public async Task<ActionResult<TransactionListResponse>> List(
         [FromQuery] DateOnly? from,
@@ -31,6 +46,10 @@ public class TransactionsController(ITransactionService transactions) : Controll
         return Ok(result);
     }
 
+    /// <summary>Возвращает одну операцию по её идентификатору.</summary>
+    /// <param name="id">Идентификатор операции.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Найденная операция.</returns>
     [HttpGet("{id:long}")]
     public async Task<ActionResult<TransactionDto>> Get(long id, CancellationToken ct)
     {
@@ -38,6 +57,12 @@ public class TransactionsController(ITransactionService transactions) : Controll
         return Ok(result);
     }
 
+    /// <summary>Возвращает сводные суммы операций за указанный период.</summary>
+    /// <param name="from">Необязательная начальная дата периода.</param>
+    /// <param name="to">Необязательная конечная дата периода.</param>
+    /// <param name="groupBy">Необязательный ключ группировки результатов.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Сводка операций с выбранной группировкой.</returns>
     [HttpGet("summary")]
     public async Task<ActionResult<SummaryResponse>> Summary(
         [FromQuery] DateOnly? from,
@@ -49,6 +74,10 @@ public class TransactionsController(ITransactionService transactions) : Controll
         return Ok(result);
     }
 
+    /// <summary>Создаёт операцию от имени текущего пользователя.</summary>
+    /// <param name="request">Поля создаваемой операции.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Созданная операция с HTTP-статусом 201.</returns>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTransactionRequest request, CancellationToken ct)
     {
@@ -61,6 +90,11 @@ public class TransactionsController(ITransactionService transactions) : Controll
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
+    /// <summary>Изменяет существующую операцию от имени текущего пользователя.</summary>
+    /// <param name="id">Идентификатор изменяемой операции.</param>
+    /// <param name="request">Новые значения полей операции.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Обновлённая операция.</returns>
     [HttpPut("{id:long}")]
     public async Task<IActionResult> Update(long id, [FromBody] CreateTransactionRequest request, CancellationToken ct)
     {
@@ -73,6 +107,10 @@ public class TransactionsController(ITransactionService transactions) : Controll
         return Ok(result);
     }
 
+    /// <summary>Удаляет операцию по идентификатору.</summary>
+    /// <param name="id">Идентификатор удаляемой операции.</param>
+    /// <param name="ct">Токен отмены запроса.</param>
+    /// <returns>Пустой ответ с HTTP-статусом 204 после удаления.</returns>
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken ct)
     {
